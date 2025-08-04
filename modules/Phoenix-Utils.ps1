@@ -74,25 +74,17 @@ function Invoke-MenuPrompt {
     
     try {
         while ($true) {
-            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Inicio del bucle while." }
-            
             Write-Styled -Type Consent -Message "${PromptMessage}: " -NoNewline
-            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Prompt mostrado. A punto de llamar a Read-Host." }
-            
             $input = (Read-Host).Trim().ToUpper()
-            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Read-Host completado. Entrada recibida: '$input'." }
 
             if ($ValidChoices -contains $input) {
-                if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Entrada válida. Saliendo de la función." }
                 return $input
             }
 
-            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Entrada inválida. Llamando a Show-TemporaryError." }
             Show-TemporaryError -ErrorMessage "Opción no válida. Por favor, intente de nuevo."
-            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Show-TemporaryError completado. Fin del bucle, se repetirá." }
         }
     } catch [System.Management.Automation.PipelineStoppedException] {
-        if ($Global:DebugUI) { Write-Host "[DEBUG-UI] EXCEPCIÓN CAPTURADA: PipelineStoppedException. Re-lanzando." }
+        # Capturada por el manejador de Ctrl+C del lanzador, simplemente re-lanzar.
         throw
     }
 }
