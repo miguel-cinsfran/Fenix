@@ -1,0 +1,113 @@
+﻿{
+    "$schema": "../catalog_schema.json",
+    "items": [
+        {
+            "id": "ShowFileExtensions",
+            "description": "Mostrar las extensiones para tipos de archivo conocidos en el Explorador.",
+            "type": "Registry", "category": "UI/UX",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "HideFileExt", "value": 0, "valueType": "DWord" }
+        },
+        {
+            "id": "ShowHiddenFiles",
+            "description": "Mostrar archivos, carpetas y unidades ocultos.",
+            "type": "Registry", "category": "UI/UX",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "Hidden", "value": 1, "valueType": "DWord" }
+        },
+        {
+            "id": "ExplorerToThisPC",
+            "description": "Hacer que el Explorador de Archivos se abra en 'Este Equipo' en lugar de 'Acceso rápido'.",
+            "type": "RegistryWithExplorerRestart", "category": "UI/UX",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "LaunchTo", "value": 1, "valueType": "DWord" }
+        },
+        {
+            "id": "FullContextMenu",
+            "description": "Restaurar el menú contextual completo de Windows 10.",
+            "type": "RegistryWithExplorerRestart", "category": "UI/UX",
+            "details": { "path": "HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32", "name": "(Default)", "value": "", "valueType": "String" }
+        },
+        {
+            "id": "LeftAlignTaskbar",
+            "description": "Alinear la barra de tareas a la izquierda (estilo Windows 10).",
+            "type": "RegistryWithExplorerRestart", "category": "UI/UX",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "TaskbarAl", "value": 0, "valueType": "DWord" }
+        },
+        {
+            "id": "HideTaskbarChat",
+            "description": "Ocultar el icono de Chat/Teams de la barra de tareas.",
+            "type": "RegistryWithExplorerRestart", "category": "UI/UX",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "TaskbarMn", "value": 0, "valueType": "DWord" }
+        },
+        {
+            "id": "HideTaskbarWidgets",
+            "description": "Eliminar el paquete de Widgets de la barra de tareas.",
+            "type": "AppxPackage", "category": "UI/UX",
+            "details": { "packageName": "MicrosoftWindows.Client.WebExperience", "state": "Removed" }
+        },
+        {
+            "id": "EnableAppsDarkTheme",
+            "description": "Activar el modo oscuro para las aplicaciones.",
+            "type": "Registry", "category": "UI/UX",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "name": "AppsUseLightTheme", "value": 0, "valueType": "DWord" }
+        },
+        {
+            "id": "EnableSystemDarkTheme",
+            "description": "Activar el modo oscuro para el sistema (barra de tareas, menú inicio).",
+            "type": "Registry", "category": "UI/UX",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "name": "SystemUsesLightTheme", "value": 0, "valueType": "DWord" }
+        },
+        {
+            "id": "SetPowerPlanHighPerformance",
+            "description": "Establecer el plan de energía activo a 'Alto Rendimiento'.",
+            "type": "PowerPlan", "category": "Performance",
+            "details": { "schemeGuid": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" }
+        },
+        {
+            "id": "DisableStartupDelay",
+            "description": "Deshabilitar el retraso de inicio para las aplicaciones de arranque.",
+            "type": "Registry", "category": "Performance",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize", "name": "StartupDelayInMSec", "value": 0, "valueType": "DWord" }
+        },
+        {
+            "id": "DisableHibernation",
+            "description": "Deshabilitar la hibernación (libera espacio en disco).",
+            "type": "PowerShellCommand", "category": "Performance",
+            "details": { "command": "powercfg.exe", "arguments": "-h off" }
+        },
+        {
+            "id": "DisableVisualFX",
+            "description": "Deshabilitar efectos visuales innecesarios para máximo rendimiento.",
+            "type": "RegistryWithExplorerRestart", "category": "Performance",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects", "name": "VisualFxSetting", "value": 2, "valueType": "DWord" }
+        },
+        {
+            "id": "DisableTelemetryService",
+            "description": "Deshabilitar el servicio de telemetría principal (DiagTrack).",
+            "type": "Service", "category": "Privacy",
+            "details": { "name": "DiagTrack", "startupType": "Disabled" }
+        },
+        {
+            "id": "DisableAdvertisingID",
+            "description": "Deshabilitar el Identificador de Publicidad único.",
+            "type": "Registry", "category": "Privacy",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo", "name": "Enabled", "value": 0, "valueType": "DWord" }
+        },
+        {
+            "id": "DisableWebSearch",
+            "description": "Deshabilitar la búsqueda web en el Menú Inicio.",
+            "type": "RegistryWithExplorerRestart", "category": "Privacy",
+            "details": { "path": "HKCU:\\Software\\Policies\\Microsoft\\Windows\\Explorer", "name": "DisableSearchBoxSuggestions", "value": 1, "valueType": "DWord" }
+        },
+        {
+            "id": "DisableSuggestedContent",
+            "description": "Deshabilitar 'Sugerencias' y publicidad en el sistema.",
+            "type": "Registry", "category": "Privacy",
+            "details": { "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SubscribedContent-338389Enabled", "value": 0, "valueType": "DWord" }
+        },
+        {
+            "id": "DisableStorageReserve",
+            "description": "Deshabilitar la reserva de almacenamiento de Windows (libera espacio).",
+            "type": "ProtectedRegistry", "category": "System",
+            "details": { "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\ReserveManager", "name": "ShippedWithReserves", "value": 0, "valueType": "DWord" }
+        }
+    ]
+}

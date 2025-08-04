@@ -1,0 +1,148 @@
+﻿<#
+.SYNOPSIS
+    Módulo de utilidades compartidas para el motor de aprovisionamiento Fénix.
+.DESCRIPTION
+    Contiene funciones de soporte para la interfaz de usuario (UI), verificaciones
+    del entorno y otras tareas comunes, para ser utilizadas por el lanzador y
+    todos los módulos de fase.
+.NOTES
+    Versión: 1.2
+    Autor: miguel-cinsfran
+#>
+
+# VARIABLES GLOBALES DE ESTILO (CARGADAS UNA VEZ)
+$Global:Theme = @{
+    Title     = "Cyan"
+    Subtle    = "DarkGray"
+    Step      = "White"
+    SubStep   = "Gray"
+    Success   = "Green"
+    Warn      = "Yellow"
+    Error     = "Red"
+    Consent   = "Cyan"
+    Info      = "Gray"
+    Log       = "DarkGray"
+    Control   = @{
+        Up        = "$([char]27)[A"
+        ClearLine = "$([char]27)[2K"
+        ToLineStart = "`r"
+    }
+}
+
+# FUNCIONES DE UI
+function Show-Header {
+    param([string]$TitleText)
+    $underline = "$([char]27)[4m"; $reset = "$([char]27)[0m"
+    Clear-Host
+    Write-Host; Write-Host "$underline$TitleText$reset" -F $Global:Theme.Title; Write-Host "---" -F $Global:Theme.Subtle; Write-Host
+}
+
+function Write-Styled {
+    param([string]$Message, [string]$Type = "Info", [switch]$NoNewline)
+    $prefixMap = @{ Step="  -> "; SubStep="     - "; Success=" [ÉXITO] "; Warn=" [OMITIDO] "; Error=" [ERROR] "; Log="       | " }
+    $prefix = $prefixMap[$Type]
+    if ($NoNewline) { Write-Host "$prefix$Message" -F $Global:Theme[$Type] -NoNewline }
+    else { Write-Host "$prefix$Message" -F $Global:Theme[$Type] }
+}
+
+function Pause-And-Return {
+    param([string]$Message = "`nPresione Enter para continuar...")
+    Write-Styled -Type Consent -Message $Message -NoNewline
+    Read-Host | Out-Null
+}
+
+function Show-TemporaryError {
+    param([string]$ErrorMessage)
+    $up = $Global:Theme.Control.Up
+    $clear = $Global:Theme.Control.ClearLine
+    $start = $Global:Theme.Control.ToLineStart
+    
+    Write-Host "${start}${up}${clear}" -NoNewline
+    
+    $errorColor = $Global:Theme.Error
+    Write-Host " [ERROR] $ErrorMessage" -ForegroundColor $errorColor
+    Start-Sleep -Seconds 2
+    
+    Write-Host "${start}${up}${clear}" -NoNewline
+}
+
+function Invoke-MenuPrompt {
+    param(
+        [string]$PromptMessage = "Seleccione una opción",
+        [string[]]$ValidChoices
+    )
+    
+    try {
+        while ($true) {
+            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Inicio del bucle while." }
+            
+            Write-Styled -Type Consent -Message "${PromptMessage}: " -NoNewline
+            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Prompt mostrado. A punto de llamar a Read-Host." }
+            
+            $input = (Read-Host).Trim().ToUpper()
+            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Read-Host completado. Entrada recibida: '$input'." }
+
+            if ($ValidChoices -contains $input) {
+                if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Entrada válida. Saliendo de la función." }
+                return $input
+            }
+
+            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Entrada inválida. Llamando a Show-TemporaryError." }
+            Show-TemporaryError -ErrorMessage "Opción no válida. Por favor, intente de nuevo."
+            if ($Global:DebugUI) { Write-Host "[DEBUG-UI] Show-TemporaryError completado. Fin del bucle, se repetirá." }
+        }
+    } catch [System.Management.Automation.PipelineStoppedException] {
+        if ($Global:DebugUI) { Write-Host "[DEBUG-UI] EXCEPCIÓN CAPTURADA: PipelineStoppedException. Re-lanzando." }
+        throw
+    }
+}
+
+
+# FUNCIONES DE VERIFICACIÓN DEL ENTORNO
+function Invoke-PreFlightChecks {
+    Show-Header -Title "FASE 0: Verificación de Requisitos del Entorno"
+    
+    Write-Styled -Message "Verificando conectividad a Internet..." -NoNewline
+    if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
+        Write-Host " [ERROR]" -F $Global:Theme.Error
+        Write-Styled -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."
+        Read-Host "Presione Enter para salir."
+        exit
+    }
+    Write-Host " [ÉXITO]" -F $Global:Theme.Success
+    Write-Styled -Message "Verificando existencia de Chocolatey..." -NoNewline
+    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
+        Write-Styled -Type Consent -Message "El gestor de paquetes Chocolatey no está instalado y es requerido."
+        if ((Read-Host "¿Desea que el script intente instalarlo ahora? (S/N)").Trim().ToUpper() -eq 'S') {
+            Write-Styled -Type Info -Message "Instalando Chocolatey... Esto puede tardar unos minutos."
+            try {
+                Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                Write-Styled -Type Success -Message "Chocolatey se ha instalado correctamente."
+                Write-Styled -Type Info -Message "Se recomienda cerrar y volver a abrir esta terminal para asegurar que el PATH se actualice."
+                Pause-And-Return
+            } catch {
+                Write-Styled -Type Error -Message "La instalación automática de Chocolatey falló."
+                Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
+                Read-Host "Presione Enter para salir."
+                exit
+            }
+        } else {
+            Write-Styled -Type Error -Message "Instalación de dependencia denegada. El script no puede continuar."
+            Read-Host "Presione Enter para salir."
+            exit
+        }
+    } else {
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+    }
+    Write-Styled -Message "Verificando existencia de Winget..." -NoNewline
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
+        Write-Styled -Type Error -Message "El gestor de paquetes Winget no fue encontrado. Por favor, actualice su 'App Installer' desde la Microsoft Store."
+        Read-Host "Presione Enter para salir."
+        exit
+    } else {
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+    }
+    Pause-And-Return -Message "Verificaciones completadas. Presione Enter para continuar..."
+}

@@ -1,0 +1,27 @@
+{
+    "$schema": "./catalog_schema.json",
+    "items": [
+        { "installId": "git", "name": "Git" },
+        { "installId": "visualstudio2022-workload-vctools", "name": "Visual Studio Build Tools" },
+        { "installId": "postgresql15", "name": "PostgreSQL 15", "special_params": "/Password:1122" },
+        { "installId": "gh", "name": "GitHub CLI" },
+        { "installId": "yt-dlp" },
+        { "installId": "jq" },
+        { "installId": "hurl" },
+        { "installId": "micro" },
+        { "installId": "aria2" },
+        { "installId": "eza" },
+        { "installId": "fd" },
+        { "installId": "ripgrep" },
+        { "installId": "bat" },
+        { "installId": "duf" },
+        { "installId": "curl" },
+        { "installId": "7zip", "name": "7-Zip" },
+        { "installId": "googlechrome", "name": "Google Chrome" },
+        { "installId": "firefox" },
+        { "installId": "notepadplusplus", "name": "Notepad++" },
+        { "installId": "vlc" },
+        { "installId": "thunderbird" },
+        { "installId": "python3", "name": "Python 3" }
+    ]
+}

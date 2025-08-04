@@ -1,0 +1,34 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Esquema para Catálogos de Software del Motor de Aprovisionamiento v5.0",
+    "description": "Define una estructura que prioriza la consulta por nombre para paquetes inconsistentes como los de MSStore, garantizando una verificación robusta.",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "installId": {
+                "description": "El ID canónico y exacto para la instalación (choco install, winget install).",
+                "type": "string"
+            },
+            "checkName": {
+                "description": "Opcional. El nombre exacto para usar en la verificación (winget list <nombre>), para paquetes donde la búsqueda por ID no es fiable.",
+                "type": "string"
+            },
+            "name": {
+                "description": "Opcional. Un nombre descriptivo y amigable para mostrar en la UI. Si se omite, se usa el installId.",
+                "type": "string"
+            },
+            "source": {
+                "description": "Opcional. La fuente específica del paquete para Winget ('msstore', 'winget').",
+                "type": "string"
+            },
+            "special_params": {
+                "description": "Parámetros de instalación especiales, solo aplicable a Chocolatey.",
+                "type": "string"
+            }
+        },
+        "required": [
+            "installId"
+        ]
+    }
+}
