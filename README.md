@@ -44,8 +44,7 @@ Script automatizado en PowerShell para la limpieza y el aprovisionamiento estand
 
 1.  Clona o descarga este repositorio en tu máquina.
     ```bash
-    # Cambia la URL por la de tu repositorio de GitHub
-    git clone "y aca el link"
+    git clone https://github.com/miguel-cinsfran/Fenix
     cd fenix
     ```
 
