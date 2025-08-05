@@ -111,7 +111,7 @@ function Apply-ProtectedRegistryTweak {
                 Set-Acl -Path $keyPath -AclObject $restoredAcl -ErrorAction Stop
             } catch {
                 Write-Styled -Type Error -Message "FALLO CRÍTICO al restaurar permisos en '$keyPath'. Se requiere intervención manual."
-                $state.ManualActions.Add("FALLO CRÍTICO: No se pudo restaurar ACL en '$keyPath'. SDDL original: $originalSddl")
+                Write-Styled -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Restaurar permisos para la clave del Registro: $keyPath"
             }
         }
     }
@@ -183,11 +183,14 @@ function Apply-Tweak {
 }
 
 function Invoke-Phase3_Tweaks {
-    param([PSCustomObject]$state, [string]$CatalogPath)
-    if ($state.FatalErrorOccurred) { return $state }
-    if (-not (Test-Path $CatalogPath)) { Write-Styled -Type Error -Message "No se encontró el catálogo de tweaks en '$CatalogPath'."; $state.FatalErrorOccurred = $true; return $state }
+    param([string]$CatalogPath)
+    if (-not (Test-Path $CatalogPath)) {
+        Write-Styled -Type Error -Message "No se encontró el catálogo de tweaks en '$CatalogPath'."
+        Pause-And-Return
+        return
+    }
     $tweaks = (Get-Content -Raw -Path $CatalogPath -Encoding UTF8 | ConvertFrom-Json).items
-    $anyTweakApplied = $false
+
     $exitMenu = $false
     while (-not $exitMenu) {
         Show-Header -Title "FASE 3: Optimización del Sistema"
@@ -205,22 +208,29 @@ function Invoke-Phase3_Tweaks {
             }
             $tweakStatusList += [PSCustomObject]@{ Tweak = $tweak; Status = $status }
         }
+
         for ($i = 0; $i -lt $tweakStatusList.Count; $i++) {
             $item = $tweakStatusList[$i]
             $statusString = "[{0}]" -f $item.Status.ToUpper()
-            Write-Styled -Type Step -Message "[$($i+1)] $($item.Tweak.description) $statusString"
+            $statusColor = if ($item.Status -eq 'Aplicado') { $Theme.Success } else { $Theme.Warn }
+            Write-Host ("[{0,2}] {1,-50} {2}" -f ($i+1), $item.Tweak.description, $statusString) -ForegroundColor $statusColor
         }
-        Write-Host; Write-Styled -Type Consent -Message "[A] Aplicar TODOS los pendientes"; Write-Styled -Type Consent -Message "[0] Volver al Menú Principal"; Write-Host
+        Write-Host
+        Write-Styled -Type Consent -Message "-> Escriba un NÚMERO para aplicar un ajuste individual."
+        Write-Styled -Type Consent -Message "-> [A] Aplicar TODOS los pendientes."
+        Write-Styled -Type Consent -Message "-> [R] Refrescar la lista."
+        Write-Styled -Type Consent -Message "-> [0] Volver al Menú Principal."
         
         $numericChoices = 1..$tweakStatusList.Count
-        $validChoices = @($numericChoices) + @('A', '0')
-        $choice = Invoke-MenuPrompt -ValidChoices $validChoices
+        $validChoices = @($numericChoices) + @('A', 'R', '0')
+        $choice = Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage "Seleccione una opción"
 
-        $actionTaken = $false
+        $errorOccurred = $false
         switch ($choice) {
             'A' {
                 $pendingTweaks = $tweakStatusList | Where-Object { $_.Status -eq 'Pendiente' }
                 if ($pendingTweaks.Count -eq 0) { Write-Styled -Type Warn -Message "No hay ajustes pendientes."; Start-Sleep -Seconds 2; continue }
+
                 foreach ($item in $pendingTweaks) {
                     $tweakToApply = $item.Tweak
                     $applyFunction = switch ($tweakToApply.type) {
@@ -228,38 +238,29 @@ function Invoke-Phase3_Tweaks {
                         'RegistryWithExplorerRestart' { ${function:Apply-RegistryWithExplorerRestart} }
                         default { ${function:Apply-Tweak} }
                     }
-                    if (-not (& $applyFunction -Tweak $tweakToApply)) { $state.FatalErrorOccurred = $true; break }
-                    $anyTweakApplied = $true
+                    if (-not (& $applyFunction -Tweak $tweakToApply)) { $errorOccurred = $true; break }
                 }
-                $actionTaken = $true
             }
-            '0' { $exitMenu = $true }
+            'R' { continue }
+            '0' { $exitMenu = $true; continue }
             default {
                 $selectedItem = $tweakStatusList[[int]$choice - 1]
                 if ($selectedItem.Status -ne 'Pendiente') { Write-Styled -Type Warn -Message "Este ajuste no está pendiente."; Start-Sleep -Seconds 2; continue }
+
                 $tweakToApply = $selectedItem.Tweak
                 $applyFunction = switch ($tweakToApply.type) {
                     'ProtectedRegistry' { ${function:Apply-ProtectedRegistryTweak} }
                     'RegistryWithExplorerRestart' { ${function:Apply-RegistryWithExplorerRestart} }
                     default { ${function:Apply-Tweak} }
                 }
-                if ((& $applyFunction -Tweak $tweakToApply)) { $anyTweakApplied = $true } else { $state.FatalErrorOccurred = $true }
-                $actionTaken = $true
+                if (-not (& $applyFunction -Tweak $tweakToApply)) { $errorOccurred = $true }
             }
         }
-        if ($actionTaken -and -not $state.FatalErrorOccurred) {
+        if ($errorOccurred) {
+            Write-Styled -Type Error -Message "Ocurrió un error al aplicar un ajuste. No se continuará."
             Pause-And-Return
-            if ($tweaks | Where-Object { $_.type -eq 'AppxPackage' -and $_.id -eq $tweakToApply.id }) {
-                $state.ManualActions.Add("Se ha eliminado un paquete de aplicación. Se recomienda reiniciar el equipo.")
-            }
+            continue
         }
-        if ($state.FatalErrorOccurred) { $exitMenu = $true }
+        Pause-And-Return
     }
-    if (-not $state.FatalErrorOccurred) {
-        $state.TweaksApplied = $true
-        if ($anyTweakApplied -and -not ($tweaks | Where-Object { $_.type -eq 'AppxPackage' })) {
-            $state.ManualActions.Add("Se han aplicado ajustes del sistema. Se recomienda reiniciar el equipo.")
-        }
-    }
-    return $state
 }

@@ -10,7 +10,6 @@
 #>
 
 function Audit-And-Repair-UserShellFolders {
-    param([PSCustomObject]$state)
     Write-Styled -Type SubStep -Message "Auditando rutas de carpetas de usuario en el Registro..."
     $keysToAudit = @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders", "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
     $issuesFound = @()
@@ -23,30 +22,34 @@ function Audit-And-Repair-UserShellFolders {
             }
         }
     }
-    if ($issuesFound.Count -eq 0) { Write-Styled -Type Success -Message "No se encontraron rutas de OneDrive en el Registro."; return }
+    if ($issuesFound.Count -eq 0) {
+        Write-Styled -Type Success -Message "No se encontraron rutas de OneDrive en el Registro."
+        return
+    }
+
     Write-Styled -Type Warn -Message "Se encontraron $($issuesFound.Count) rutas del Registro apuntando a OneDrive:"
     $issuesFound | ForEach-Object { Write-Styled -Type Info -Message "  $($_.Name) = '$($_.BadValue)'" }
     Write-Styled -Type Consent -Message "`nADVERTENCIA: La reparación de estas rutas es una operación de alto riesgo."
-    if ((Read-Host "¿Autoriza al script a intentar corregir estas entradas? (S/N)").Trim().ToUpper() -eq 'S') {
+
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Autoriza al script a intentar corregir estas entradas?") -eq 'S') {
         Write-Styled -Message "Reparando claves del Registro..." -NoNewline
         $issuesFound | ForEach-Object { $pattern = [regex]::Escape($env:USERPROFILE) + '.*\\OneDrive'; $newValue = $_.BadValue -replace $pattern, "$env:USERPROFILE"; Set-ItemProperty -Path $_.Key -Name $_.Name -Value $newValue -Type ExpandString }
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
         Write-Styled -Message "Reiniciando Explorador para aplicar cambios..." -NoNewline; Get-Process explorer | Stop-Process -Force; Write-Host " [ÉXITO]" -F $Global:Theme.Success
-        $state.ManualActions.Add("Se han corregido rutas del Registro. Se recomienda reiniciar el equipo para garantizar la correcta aplicación de los cambios.")
+        Write-Styled -Type Warn -Message "ACCIÓN MANUAL RECOMENDADA: Reinicie el equipo para garantizar la correcta aplicación de los cambios del Registro."
     } else {
         Write-Styled -Type Error -Message "Consentimiento no otorgado. El Registro no ha sido modificado."
-        $state.ManualActions.Add("El script detectó rutas de usuario apuntando a OneDrive, pero no se le dio permiso para corregirlas.")
+        Write-Styled -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Corrija manualmente las rutas del registro que apuntan a OneDrive."
     }
 }
 
 function Invoke-Phase1_OneDrive {
-    param([PSCustomObject]$state)
-    if ($state.FatalErrorOccurred) { return $state } # Contrato de propagación de errores
-
     Show-Header -Title "FASE 1: Erradicación de OneDrive"
     Write-Styled -Type Consent -Message "Esta fase detendrá procesos, desinstalará OneDrive y purgará sus rastros del sistema."
-    if ((Read-Host "¿Confirma que desea proceder con la erradicación completa de OneDrive? (S/N)").Trim().ToUpper() -ne 'S') {
-        Write-Styled -Type Warn -Message "Operación cancelada por el usuario."; Start-Sleep -Seconds 2; return $state
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Confirma que desea proceder con la erradicación completa de OneDrive?") -ne 'S') {
+        Write-Styled -Type Warn -Message "Operación cancelada por el usuario."
+        Start-Sleep -Seconds 2
+        return
     }
     try {
         Write-Styled -Message "Deteniendo procesos de OneDrive..." -NoNewline; Get-Process OneDrive -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host " [ÉXITO]" -F $Global:Theme.Success
@@ -60,19 +63,9 @@ function Invoke-Phase1_OneDrive {
         Write-Styled -Message "Purgando tareas programadas..." -NoNewline; Get-ScheduledTask -TaskPath "\*" | Where-Object { $_.TaskName -like "*OneDrive*" } | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue; Write-Host " [ÉXITO]" -F $Global:Theme.Success
         Write-Styled -Message "Purgando claves del Explorador..." -NoNewline; @("HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}", "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}") | ForEach-Object { if (Test-Path $_) { Remove-Item -Path $_ -Recurse -Force } }; Write-Host " [ÉXITO]" -F $Global:Theme.Success
         Write-Styled -Message "Purgando accesos directos..." -NoNewline; $startMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk"; if (Test-Path $startMenuPath) { Remove-Item $startMenuPath -Force }; Write-Host " [ÉXITO]" -F $Global:Theme.Success
-        Audit-And-Repair-UserShellFolders -state $state
-        $state.OneDriveErradicated = $true
+        Audit-And-Repair-UserShellFolders
     } catch {
-        $state.FatalErrorOccurred = $true
         Write-Styled -Type Error -Message "Error fatal en la erradicación de OneDrive: $($_.Exception.Message)"
+        Pause-And-Return
     }
-
-    if (-not ($state -is [PSCustomObject]) -or -not ($state.PSObject.Properties.Name -contains 'FatalErrorOccurred')) {
-        Write-Styled -Type Error -Message "CRITICAL: El objeto de estado se corrompió durante la Fase 1."
-        # No se puede confiar en el estado, así que no lo devolvemos.
-        # El lanzador detectará que el estado es nulo y se detendrá.
-        return $null
-    }
-
-    return $state
 }

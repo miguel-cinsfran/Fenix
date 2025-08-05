@@ -14,22 +14,22 @@ function _Execute-SoftwareJob {
         [string]$PackageName,
         [string]$Executable,
         [string]$ArgumentList,
-        [PSCustomObject]$state,
         [string[]]$FailureStrings
     )
 
     # Deshabilitar el timeout de inactividad para instalaciones de software,
     # ya que pueden tener largos periodos de descarga sin actividad en la consola.
-    $result = Invoke-NativeCommand -Executable $Executable -ArgumentList $ArgumentList -FailureStrings $FailureStrings -Activity "Ejecutando: $($Executable) $($ArgumentList)" -IdleTimeoutEnabled $false
+    $result = Invoke-NativeCommand -Executable $Executable -ArgumentList $ArgumentList -FailureStrings $FailureStrings -Activity "Ejecutando: ${Executable} ${ArgumentList}" -IdleTimeoutEnabled $false
 
     if (-not $result.Success) {
-        $state.FatalErrorOccurred = $true
         Write-Styled -Type Error -Message "Falló la operación para ${PackageName}."
         if ($result.Output) {
             Write-Styled -Type Log -Message "--- INICIO DE SALIDA DEL PROCESO ---"
             $result.Output | ForEach-Object { Write-Styled -Type Log -Message $_ }
             Write-Styled -Type Log -Message "--- FIN DE SALIDA DEL PROCESO ---"
         }
+        # Lanzar una excepción permite que el bucle que llama se detenga.
+        throw "La operación de software para ${PackageName} falló."
     } else {
         Write-Styled -Type Success -Message "Operación para ${PackageName} finalizada."
     }
@@ -219,41 +219,41 @@ function _Get-WingetPackageStatus_Cli {
 
 #region Package Action Helpers
 function _Install-Package {
-    param([string]$Manager, [PSCustomObject]$Item, [PSCustomObject]$state)
+    param([string]$Manager, [PSCustomObject]$Item)
     $pkg = $Item.Package
     if ($Manager -eq 'Chocolatey') {
         $chocoArgs = @("install", $pkg.installId, "-y", "--no-progress")
         if ($pkg.special_params) { $chocoArgs += "--params='$($pkg.special_params)'" }
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
     } else { # Winget
         $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
         if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
 }
 
 function _Uninstall-Package {
-    param([string]$Manager, [PSCustomObject]$Item, [PSCustomObject]$state)
+    param([string]$Manager, [PSCustomObject]$Item)
     $pkg = $Item.Package
     if ($Manager -eq 'Chocolatey') {
         $chocoArgs = @("uninstall", $pkg.installId, "-y")
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
     } else { # Winget
         $wingetArgs = @("uninstall", "--id", $pkg.installId, "--silent")
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
 }
 
 function _Update-Package {
-    param([string]$Manager, [PSCustomObject]$Item, [PSCustomObject]$state)
+    param([string]$Manager, [PSCustomObject]$Item)
     $pkg = $Item.Package
     if ($Manager -eq 'Chocolatey') {
         $chocoArgs = @("upgrade", $pkg.installId, "-y", "--no-progress")
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
     } else { # Winget
         # Winget upgrade is the same as install
         $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
 }
 #endregion
@@ -262,8 +262,7 @@ function _Update-Package {
 function _Invoke-SinglePackageMenu {
     param(
         [string]$Manager,
-        [PSCustomObject]$Item,
-        [PSCustomObject]$state
+        [PSCustomObject]$Item
     )
     $exitMenu = $false
     while (-not $exitMenu) {
@@ -279,7 +278,7 @@ function _Invoke-SinglePackageMenu {
             }
             $menuOptions['D'] = "Desinstalar paquete"
         }
-        $menuOptions['B'] = "Volver"
+        $menuOptions['0'] = "Volver"
 
         Write-Styled -Type Title -Message "Acciones Disponibles:"
         foreach ($key in $menuOptions.Keys | Sort-Object) {
@@ -289,15 +288,15 @@ function _Invoke-SinglePackageMenu {
         $choice = Invoke-MenuPrompt -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" })
 
         switch ($choice) {
-            'I' { _Install-Package -Manager $Manager -Item $Item -state $state; $exitMenu = $true }
-            'A' { _Update-Package -Manager $Manager -Item $Item -state $state; $exitMenu = $true }
+            'I' { _Install-Package -Manager $Manager -Item $Item; $exitMenu = $true }
+            'A' { _Update-Package -Manager $Manager -Item $Item; $exitMenu = $true }
             'D' {
-                if ((Read-Host "¿Está seguro que desea desinstalar $($Item.DisplayName)? (S/N)").Trim().ToUpper() -eq 'S') {
-                    _Uninstall-Package -Manager $Manager -Item $Item -state $state
+                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Está seguro que desea desinstalar $($Item.DisplayName)?") -eq 'S') {
+                    _Uninstall-Package -Manager $Manager -Item $Item
                 }
                 $exitMenu = $true
             }
-            'B' { $exitMenu = $true }
+            '0' { $exitMenu = $true }
         }
     }
 }
@@ -305,8 +304,7 @@ function _Invoke-SinglePackageMenu {
 function Invoke-SoftwareManagerUI {
     param(
         [string]$Manager,
-        [string]$CatalogFile,
-        [PSCustomObject]$state
+        [string]$CatalogFile
     )
 
     try {
@@ -364,9 +362,9 @@ function Invoke-SoftwareManagerUI {
             Write-Styled -Type Consent -Message "-> [A] Actualizar TODOS los paquetes desactualizados."
         }
         Write-Styled -Type Consent -Message "-> [R] Refrescar la lista de paquetes."
-        Write-Styled -Type Consent -Message "-> [B] Volver al menú anterior."
+        Write-Styled -Type Consent -Message "-> [0] Volver al menú anterior."
 
-        $validChoices = @('A', 'R', 'B') + (1..$packageStatusList.Count)
+        $validChoices = @('A', 'R', '0') + (1..$packageStatusList.Count)
         $choice = Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage "Seleccione una opción"
 
         switch ($choice) {
@@ -374,9 +372,13 @@ function Invoke-SoftwareManagerUI {
                 $packagesToUpdate = $packageStatusList | Where-Object { $_.IsUpgradable }
                 if ($packagesToUpdate.Count -gt 0) {
                     Write-Styled -Type Info -Message "Actualizando $($packagesToUpdate.Count) paquetes..."
-                    foreach ($item in $packagesToUpdate) {
-                        if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "Abortando..."; break }
-                        _Update-Package -Manager $Manager -Item $item -state $state
+                    try {
+                        foreach ($item in $packagesToUpdate) {
+                            _Update-Package -Manager $Manager -Item $item
+                        }
+                    } catch {
+                        Write-Styled -Type Error -Message "Ocurrió un error durante la actualización masiva. No todas las actualizaciones pudieron completarse."
+                        Pause-And-Return
                     }
                 } else {
                     Write-Styled -Type Info -Message "No hay paquetes para actualizar."
@@ -384,26 +386,91 @@ function Invoke-SoftwareManagerUI {
                 }
             }
             'R' { continue }
-            'B' { $exitManagerUI = $true }
+            '0' { $exitManagerUI = $true }
             default { # Es un número
                 $packageIndex = [int]$choice - 1
                 $selectedItem = $packageStatusList[$packageIndex]
-                _Invoke-SinglePackageMenu -Manager $Manager -Item $selectedItem -state $state
+                _Invoke-SinglePackageMenu -Manager $Manager -Item $selectedItem
             }
         }
     }
 }
 
+function Invoke-Phase2_PreFlightChecks {
+    Show-Header -Title "FASE 2: Verificación de Dependencias"
+
+    $allChecksPassed = $true
+
+    Write-Styled -Message "Verificando existencia de Chocolatey..." -NoNewline
+    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
+        Write-Styled -Type Consent -Message "El gestor de paquetes Chocolatey no está instalado y es requerido para esta fase."
+        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea que el script intente instalarlo ahora?") -eq 'S') {
+            Write-Styled -Type Info -Message "Instalando Chocolatey... Esto puede tardar unos minutos."
+            try {
+                Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+                Write-Styled -Type Success -Message "Chocolatey se ha instalado correctamente."
+            } catch {
+                Write-Styled -Type Error -Message "La instalación automática de Chocolatey falló."
+                $allChecksPassed = $false
+            }
+        } else {
+            $allChecksPassed = $false
+        }
+    } else {
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+    }
+
+    Write-Styled -Message "Verificando existencia de Winget..." -NoNewline
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Error
+        Write-Styled -Type Error -Message "El gestor de paquetes Winget no fue encontrado. Por favor, actualice su 'App Installer' desde la Microsoft Store."
+        $allChecksPassed = $false
+    } else {
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+    }
+
+    Write-Styled -Message "Verificando módulo de PowerShell para Winget..." -NoNewline
+    if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
+        Write-Styled -Type Consent -Message "El módulo de PowerShell para Winget es recomendado para una operación robusta."
+        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea que el script intente instalarlo ahora?") -eq 'S') {
+            Write-Styled -Type Info -Message "Instalando módulo 'Microsoft.WinGet.Client'..."
+            try {
+                Install-Module -Name Microsoft.WinGet.Client -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
+                Write-Styled -Type Success -Message "Módulo instalado correctamente."
+            } catch {
+                Write-Styled -Type Error -Message "La instalación automática del módulo de Winget falló: $($_.Exception.Message)"
+                Write-Styled -Type Warn -Message "El script continuará usando el método de reserva (CLI)."
+                $Global:UseWingetCli = $true
+            }
+        } else {
+            Write-Styled -Type Warn -Message "Instalación denegada. El script usará el método de reserva para Winget."
+            $Global:UseWingetCli = $true
+        }
+    } else {
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+    }
+
+    if (-not $allChecksPassed) {
+        Pause-And-Return -Message "Una o más dependencias críticas no fueron satisfechas. Volviendo al menú principal."
+    }
+    return $allChecksPassed
+}
+
 function Invoke-Phase2_SoftwareMenu {
-    param([PSCustomObject]$state, [string]$CatalogPath)
-    if ($state.FatalErrorOccurred) { return $state }
+    param([string]$CatalogPath)
     
+    if (-not (Invoke-Phase2_PreFlightChecks)) {
+        return # Salir si las comprobaciones fallan
+    }
+
     $chocoCatalogFile = Join-Path $CatalogPath "chocolatey_catalog.json"
     $wingetCatalogFile = Join-Path $CatalogPath "winget_catalog.json"
     if (-not (Test-Path $chocoCatalogFile) -or -not (Test-Path $wingetCatalogFile)) {
         Write-Styled -Type Error -Message "No se encontraron los archivos de catálogo en '${CatalogPath}'."
-        $state.FatalErrorOccurred = $true
-        return $state
+        Pause-And-Return
+        return
     }
 
     $exitSubMenu = $false
@@ -419,14 +486,14 @@ function Invoke-Phase2_SoftwareMenu {
 
         switch ($choice) {
             '1' {
-                Invoke-SoftwareManagerUI -Manager 'Chocolatey' -CatalogFile $chocoCatalogFile -state $state
+                Invoke-SoftwareManagerUI -Manager 'Chocolatey' -CatalogFile $chocoCatalogFile
             }
             '2' {
-                Invoke-SoftwareManagerUI -Manager 'Winget' -CatalogFile $wingetCatalogFile -state $state
+                Invoke-SoftwareManagerUI -Manager 'Winget' -CatalogFile $wingetCatalogFile
             }
             '3' {
                 Write-Styled -Type Consent -Message "Esta opción instalará TODOS los paquetes no instalados de AMBOS catálogos."
-                if ((Read-Host "¿Está seguro que desea continuar? (S/N)").Trim().ToUpper() -eq 'S') {
+                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro que desea continuar?") -eq 'S') {
                     # Lógica de instalación masiva
                     $catalogs = @(
                         @{ Manager = 'Chocolatey'; CatalogFile = $chocoCatalogFile },
@@ -443,8 +510,7 @@ function Invoke-Phase2_SoftwareMenu {
                         if ($packagesToInstall.Count -gt 0) {
                              Write-Styled -Type Info -Message "Instalando $($packagesToInstall.Count) paquetes de ${manager}..."
                              foreach ($item in $packagesToInstall) {
-                                if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "Abortando..."; break }
-                                _Install-Package -Manager $manager -Item $item -state $state
+                                _Install-Package -Manager $manager -Item $item
                              }
                         } else {
                             Write-Styled -Type Info -Message "No hay paquetes nuevos para instalar de ${manager}."
@@ -458,8 +524,5 @@ function Invoke-Phase2_SoftwareMenu {
             }
         }
     }
-
-    if (-not $state.FatalErrorOccurred) { $state.SoftwareInstalled = $true }
-    return $state
 }
 #endregion

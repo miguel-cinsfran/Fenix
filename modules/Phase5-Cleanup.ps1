@@ -109,8 +109,11 @@ function _Invoke-AnalyzeProcesses {
 function _Invoke-SetDNS {
     param($Task)
     Write-Styled -Type Info -Message "Los servidores DNS públicos como Cloudflare o Google pueden ofrecer mayor velocidad y privacidad que los de su proveedor de internet."
-    Write-Styled -Type Consent -Message "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))? (S/N)"
-    if ((Read-Host).Trim().ToUpper() -ne 'S') { Write-Styled -Type Warn -Message "Operación cancelada."; Pause-And-Return; return }
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?") -ne 'S') {
+        Write-Styled -Type Warn -Message "Operación cancelada."
+        Pause-And-Return
+        return
+    }
 
     Write-Styled -Type SubStep -Message "Cambiando DNS a: $($Task.details.name)..."
     Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Set-DnsClientServerAddress -ServerAddresses ($Task.details.servers)
@@ -133,7 +136,7 @@ function _Invoke-RecycleBinCleanup {
             $sizeInMB = [math]::Round($totalSize / 1MB, 2)
 
             Write-Styled -Type Info -Message "Se encontraron $itemCount objeto(s), con un tamaño total de $sizeInMB MB."
-            if ((Read-Host "¿Confirma que desea vaciar la papelera permanentemente? (S/N)").Trim().ToUpper() -eq 'S') {
+            if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea vaciar la papelera permanentemente?") -eq 'S') {
                 Clear-RecycleBin -Force -ErrorAction Stop
                 Write-Styled -Type Success -Message "Se han liberado $sizeInMB MB de espacio."
             } else {
@@ -151,7 +154,7 @@ function _Invoke-WindowsUpdateCleanup {
     Write-Styled -Type SubStep -Message $Task.description
     Write-Styled -Type Info -Message "Esta operación eliminará archivos de instalación de Windows Update que ya no son necesarios."
     Write-Styled -Type Warn -Message "Puede liberar una cantidad significativa de espacio y puede tardar mucho tiempo."
-    if ((Read-Host "¿Desea proceder con la limpieza profunda? (S/N)").Trim().ToUpper() -eq 'S') {
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea proceder con la limpieza profunda?") -eq 'S') {
         $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /English /Cleanup-Image /StartComponentCleanup /ResetBase" -FailureStrings "Error:" -Activity "Limpiando archivos de Windows Update"
         if ($result.Success) {
             Write-Styled -Type Success -Message "Tarea '$($Task.description)' completada."
@@ -165,22 +168,20 @@ function _Invoke-WindowsUpdateCleanup {
 }
 
 function Invoke-Phase5_Cleanup {
-    param([PSCustomObject]$state, [string]$CatalogPath)
-    if ($state.FatalErrorOccurred) { return $state }
-
+    param([string]$CatalogPath)
     $cleanupCatalogFile = Join-Path $CatalogPath "system_cleanup.json"
     if (-not (Test-Path $cleanupCatalogFile)) {
         Write-Styled -Type Error -Message "No se encontró el catálogo de limpieza en '$cleanupCatalogFile'."
-        $state.FatalErrorOccurred = $true
-        return $state
+        Pause-And-Return
+        return
     }
 
     try {
         $tasks = (Get-Content -Raw -Path $cleanupCatalogFile -Encoding UTF8 | ConvertFrom-Json).items
     } catch {
         Write-Styled -Type Error -Message "Fallo CRÍTICO al procesar '$cleanupCatalogFile'."
-        $state.FatalErrorOccurred = $true
-        return $state
+        Pause-And-Return
+        return
     }
 
     $exitMenu = $false
@@ -214,7 +215,4 @@ function Invoke-Phase5_Cleanup {
             }
         }
     }
-
-    $state.CleanupPerformed = $true # Placeholder state
-    return $state
 }
