@@ -98,7 +98,7 @@ function _Get-PackageStatus {
         }
     }
 
-    return foreach ($pkg in $CatalogPackages) {
+    foreach ($pkg in $CatalogPackages) {
         $installId = $pkg.installId
         $status = "No Instalado"
         $versionInfo = ""
