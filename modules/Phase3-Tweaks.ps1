@@ -14,24 +14,24 @@ function Verify-RegistryTweak {
     param([PSCustomObject]$Tweak)
     $details = $Tweak.details
     try {
-        # Si la clave o el valor no existen, Get-ItemPropertyValue lanza una excepción que se captura abajo.
-        $currentValue = Get-ItemPropertyValue -Path $details.path -Name $details.name -ErrorAction Stop
-
-        # Compara el valor actual con el deseado.
-        if ("$currentValue" -eq "$($details.value)") {
-            return "Aplicado" # El valor ya es el correcto.
-        } else {
-            return "Pendiente" # El valor existe pero es diferente.
-        }
-    } catch [System.Management.Automation.ItemNotFoundException] {
-        # Significa que la clave o el valor no existen. Para un Tweak que busca CREAR un valor,
-        # este estado es 'Pendiente'. Esto es correcto para todos los tweaks actuales del catálogo.
-        return "Pendiente"
+        $regKeyObject = Get-ItemProperty -Path $details.path -ErrorAction Stop
     } catch {
-        # Captura cualquier otro error inesperado (ej. permisos).
-        Write-Styled -Type Log -Message "Error al verificar el Tweak '$($Tweak.id)': $($_.Exception.Message)"
-        return "Error"
+        # Si Get-ItemProperty falla, la ruta o la propiedad no existen.
+        # Para cualquier Tweak que busque establecer un valor, este estado es 'Pendiente'.
+        return "Pendiente"
     }
+
+    # Esta parte se mantiene igual para manejar correctamente el caso especial de FullContextMenu.
+    $currentValue = if ($regKeyObject.PSObject.Properties.Name -contains $details.name) { $regKeyObject.$($details.name) } else { $null }
+    if ($Tweak.id -eq "FullContextMenu") {
+        # Este Tweak se considera aplicado si el valor (Default) está presente y vacío.
+        if ($null -ne $currentValue -and $currentValue -eq "") { return "Aplicado" }
+        return "Pendiente"
+    }
+
+    # Comparación estándar para todos los demás tweaks del registro.
+    if ("$currentValue" -eq "$($details.value)") { return "Aplicado" }
+    return "Pendiente"
 }
 
 function Verify-AppxPackage {
@@ -41,7 +41,8 @@ function Verify-AppxPackage {
         if ($null -eq $package) { return "Aplicado" }
         return "Pendiente"
     }
-    return "Error" # Estado no soportado.
+    # Se puede extender para estados 'Presente' si es necesario en el futuro
+    return "Error"
 }
 
 function Verify-PowerPlanTweak {
@@ -49,19 +50,16 @@ function Verify-PowerPlanTweak {
     if ((powercfg.exe /getactivescheme) -match $Tweak.details.schemeGuid) { return "Aplicado" }
     return "Pendiente"
 }
-
 function Verify-ServiceTweak {
     param([PSCustomObject]$Tweak)
     try {
-        $service = Get-CimInstance -ClassName Win32_Service -Filter "Name = '$($Tweak.details.name)'" -ErrorAction Stop
+        $service = Get-CimInstance -ClassName Win32_Service -Filter "Name = '$($Tweak.details.name)'"
         if ($service.StartMode -eq $Tweak.details.startupType) { return "Aplicado" }
         return "Pendiente"
     } catch { return "NoEncontrado" }
 }
-
 function Verify-PowerShellCommandTweak {
     param([PSCustomObject]$Tweak)
-    # Esta verificación sigue siendo específica porque depende de la salida de un comando.
     if ($Tweak.id -eq "DisableHibernation" -and (powercfg.exe /a) -match "La hibernación no está disponible.") { return "Aplicado" }
     return "Pendiente"
 }
@@ -158,7 +156,7 @@ function Apply-Tweak {
         switch ($Tweak.type) {
             'Registry' {
                 if (-not (Test-Path $Tweak.details.path)) { New-Item -Path $Tweak.details.path -Force | Out-Null }
-                New-ItemProperty -Path $Tweak.details.path -Name $Tweak.details.name -Value $Tweak.details.value -PropertyType $Tweak.details.valueType -Force -ErrorAction Stop
+                New-ItemProperty -Path $Tweak.details.path -Name $details.name -Value $details.value -PropertyType $details.valueType -Force -ErrorAction Stop
             }
             'AppxPackage' {
                 if ($Tweak.details.state -eq 'Removed') {
@@ -213,9 +211,10 @@ function Invoke-Phase3_Tweaks {
             [PSCustomObject]@{ Tweak = $tweak; Status = $status }
         }
 
-        foreach ($item in $tweakStatusList.Select((@('Tweak','Status')),(@{$i=1},{$i++}))) {
+        for ($i = 0; $i -lt $tweakStatusList.Count; $i++) {
+            $item = $tweakStatusList[$i]
             $statusString = "[{0}]" -f $item.Status.ToUpper()
-            Write-Styled -Type Step -Message "[$($i)] $($item.Tweak.description) $statusString"
+            Write-Styled -Type Step -Message "[$($i+1)] $($item.Tweak.description) $statusString"
         }
 
         Write-Host; Write-Styled -Type Consent -Message "[A] Aplicar TODOS los pendientes"; Write-Styled -Type Consent -Message "[0] Volver al Menú Principal"; Write-Host
@@ -238,6 +237,7 @@ function Invoke-Phase3_Tweaks {
             }
         }
 
+        $anyTweakAppliedInLoop = $false
         foreach ($item in $tweaksToProcess) {
             $tweak = $item.Tweak
             $applyFunction = switch ($tweak.type) {
@@ -248,7 +248,8 @@ function Invoke-Phase3_Tweaks {
 
             $success = & $applyFunction -Tweak $tweak
             if ($success) {
-                if ($tweak.type -ne 'PowerPlan') { $needsReboot = $true } # Marcar para la recomendación de reinicio
+                $anyTweakAppliedInLoop = $true
+                if ($tweak.type -ne 'PowerPlan') { $needsReboot = $true }
             } else {
                 $state.FatalErrorOccurred = $true
                 break
@@ -257,7 +258,7 @@ function Invoke-Phase3_Tweaks {
 
         if ($state.FatalErrorOccurred) {
             $exitMenu = $true
-        } elseif ($tweaksToProcess.Count -gt 0) {
+        } elseif ($anyTweakAppliedInLoop) {
             Pause-And-Return
         }
     }
