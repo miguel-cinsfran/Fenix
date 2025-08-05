@@ -10,22 +10,14 @@
     Requiere: Privilegios de Administrador. Estructura de directorios modular.
 #>
 
-# SECCIÓN -1: DEFINICIÓN DE PARÁMETROS
-param(
-    [switch]$DebugUI
-)
-
 # SECCIÓN 0: CONFIGURACIÓN DE CODIFICACIÓN UNIVERSAL
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-if ($DebugUI) { $Global:DebugUI = $true }
-
 # SECCIÓN 1: AUTO-ELEVACIÓN DE PRIVILEGIOS
 if (-not ([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Warning "Se requieren privilegios de Administrador. Relanzando..."
-    $arguments = if ($DebugUI) { "-DebugUI" } else { "" }
-    Start-Process powershell -Verb RunAs -ArgumentList "-File `"$($myinvocation.mycommand.definition)`" $arguments"
+    Start-Process powershell -Verb RunAs -ArgumentList "-File `"$($myinvocation.mycommand.definition)`""
     exit
 }
 
@@ -51,6 +43,8 @@ try {
     . (Join-Path $modulesPath "Phase1-OneDrive.ps1")
     . (Join-Path $modulesPath "Phase2-Software.ps1")
     . (Join-Path $modulesPath "Phase3-Tweaks.ps1")
+    . (Join-Path $modulesPath "Phase4-WSL.ps1")
+    . (Join-Path $modulesPath "Phase5-Cleanup.ps1")
 } catch {
     Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$modulesPath'." -F Red
     Write-Host "Error original: $($_.Exception.Message)" -F Red
@@ -67,6 +61,8 @@ function New-CleanState {
         OneDriveErradicated = $false
         SoftwareInstalled   = $false
         TweaksApplied       = $false
+        WSLInstalled        = $false
+        CleanupPerformed    = $false
         FatalErrorOccurred  = $false
         ManualActions       = [System.Collections.Generic.List[string]]::new()
     }
@@ -132,6 +128,24 @@ $mainMenuOptions = @(
             return $s
         }
         StatusCheck = { param($s) $s.TweaksApplied }
+    },
+    [PSCustomObject]@{
+        Description = "Ejecutar FASE 4: Instalación de WSL2"
+        Action = {
+            param($s)
+            $s = Invoke-Phase4_WSL -state $s
+            return $s
+        }
+        StatusCheck = { param($s) $s.WSLInstalled }
+    },
+    [PSCustomObject]@{
+        Description = "Ejecutar FASE 5: Limpieza del Sistema"
+        Action = {
+            param($s)
+            $s = Invoke-Phase5_Cleanup -state $s -CatalogPath $catalogsPath
+            return $s
+        }
+        StatusCheck = { param($s) $s.CleanupPerformed }
     }
 )
 

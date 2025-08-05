@@ -81,6 +81,45 @@ function Invoke-MenuPrompt {
     }
 }
 
+function Invoke-JobWithTimeout {
+    param(
+        [scriptblock]$ScriptBlock,
+        [int]$TimeoutSeconds = 120,
+        [string]$Activity = "Ejecutando operación en segundo plano..."
+    )
+
+    $job = Start-Job -ScriptBlock $ScriptBlock
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    $timeout = New-TimeSpan -Seconds $TimeoutSeconds
+
+    while ($job.State -eq 'Running' -and $timer.Elapsed -lt $timeout) {
+        Write-Progress -Activity $Activity -Status "Tiempo restante: $(($timeout - $timer.Elapsed).ToString('mm\:ss'))" -PercentComplete (($timer.Elapsed.TotalSeconds / $TimeoutSeconds) * 100)
+        Start-Sleep -Milliseconds 250
+    }
+    Write-Progress -Activity $Activity -Completed
+
+    $result = [PSCustomObject]@{
+        Success = $false
+        Output = @()
+        Error = ""
+    }
+
+    if ($job.State -eq 'Running') {
+        $result.Error = "La operación excedió el tiempo de espera de $TimeoutSeconds segundos y fue terminada."
+        Stop-Job $job -Force
+    }
+    elseif ($job.State -eq 'Failed') {
+        $result.Error = ($job.Error | Select-Object -First 1).Exception.Message
+    }
+    else {
+        $result.Success = $true
+    }
+
+    $result.Output = Receive-Job $job
+    Remove-Job $job -Force
+    return $result
+}
+
 
 # FUNCIONES DE VERIFICACIÓN DEL ENTORNO
 function Invoke-PreFlightChecks {

@@ -1,0 +1,71 @@
+{
+    "$schema": "./cleanup_schema.json",
+    "items": [
+        {
+            "id": "ClearTempFiles",
+            "description": "Limpiar archivos temporales de Usuario y de Sistema",
+            "type": "SimpleCommand",
+            "details": {
+                "command": "Get-ChildItem -Path $env:TEMP, C:\\Windows\\Temp -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+            }
+        },
+        {
+            "id": "EmptyRecycleBin",
+            "description": "Vaciar la Papelera de Reciclaje",
+            "type": "SimpleCommand",
+            "details": {
+                "command": "Clear-RecycleBin -Force -ErrorAction SilentlyContinue"
+            }
+        },
+        {
+            "id": "CleanupWinUpdate",
+            "description": "Eliminar archivos residuales de Windows Update",
+            "type": "SimpleCommand",
+            "details": {
+                "command": "Dism.exe /Online /English /Cleanup-Image /StartComponentCleanup"
+            }
+        },
+        {
+            "id": "OptimizeDisks",
+            "description": "Optimizar unidades (Desfragmentar HDD / ReTrim SSD)",
+            "type": "DiskCleanup",
+            "details": {}
+        },
+        {
+            "id": "FindLargeFiles",
+            "description": "Buscar los 20 archivos más grandes (>500MB) en la unidad C:",
+            "type": "FindLargeFiles",
+            "details": {
+                "drive": "C:",
+                "minSizeMB": 500,
+                "count": 20
+            }
+        },
+        {
+            "id": "AnalyzeProcesses",
+            "description": "Mostrar los 10 procesos que más consumen CPU y Memoria",
+            "type": "AnalyzeProcesses",
+            "details": {
+                "count": 10
+            }
+        },
+        {
+            "id": "SetCloudflareDNS",
+            "description": "Cambiar DNS a Cloudflare (1.1.1.1, 1.0.0.1)",
+            "type": "SetDNS",
+            "details": {
+                "servers": ["1.1.1.1", "1.0.0.1"],
+                "name": "Cloudflare"
+            }
+        },
+        {
+            "id": "SetGoogleDNS",
+            "description": "Cambiar DNS a Google (8.8.8.8, 8.8.4.4)",
+            "type": "SetDNS",
+            "details": {
+                "servers": ["8.8.8.8", "8.8.4.4"],
+                "name": "Google"
+            }
+        }
+    ]
+}
