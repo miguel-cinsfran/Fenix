@@ -35,59 +35,92 @@ function _Execute-SoftwareJob {
     }
 }
 
-function _Get-PackageStatus {
-    param(
-        [string]$Manager,
-        [array]$CatalogPackages
-    )
+function _Get-ChocolateyPackageStatus {
+    param([array]$CatalogPackages)
+
     $installedPackages = @{}
     $outdatedPackages = @{}
 
-    if ($Manager -eq 'Chocolatey') {
-        $listResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "list --limit-output --local-only" -Activity "Consultando paquetes de Chocolatey"
-        if ($listResult.Success) {
-            $listResult.Output -split "`n" | ForEach-Object { $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id.Trim()] = $version.Trim() } }
-        } else { Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados."; return $null }
+    $listResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "list --limit-output --local-only" -Activity "Consultando paquetes de Chocolatey"
+    if (-not $listResult.Success) {
+        Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados."
+        return $null
+    }
+    $listResult.Output -split "`n" | ForEach-Object { $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id.Trim()] = $version.Trim() } }
 
-        $outdatedResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "outdated --limit-output" -Activity "Buscando actualizaciones de Chocolatey"
-        if ($outdatedResult.Success) {
-            $outdatedResult.Output -split "`n" | ForEach-Object { $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id.Trim()] = @{ Current = $current.Trim(); Available = $available.Trim() } } }
+    $outdatedResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "outdated --limit-output" -Activity "Buscando actualizaciones de Chocolatey"
+    if ($outdatedResult.Success) {
+        $outdatedResult.Output -split "`n" | ForEach-Object { $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id.Trim()] = @{ Current = $current.Trim(); Available = $available.Trim() } } }
+    }
+
+    # Procesamiento final (común a ambos)
+    $packageStatusList = @()
+    foreach ($pkg in $CatalogPackages) {
+        $installId = $pkg.installId
+        $status = "No Instalado"
+        $versionInfo = ""
+        $isUpgradable = $false
+
+        if ($outdatedPackages.ContainsKey($installId)) {
+            $status = "Actualización Disponible"
+            $versionInfo = "(v$($outdatedPackages[$installId].Current) -> v$($outdatedPackages[$installId].Available))"
+            $isUpgradable = $true
+        } elseif ($installedPackages.ContainsKey($installId)) {
+            $status = "Instalado"
+            $versionInfo = "(v$($installedPackages[$installId]))"
         }
 
-    } else { # Winget
-        $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --disable-interactivity --accept-source-agreements" -Activity "Consultando paquetes de Winget"
-        if (-not $listResult.Success) { Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados."; return $null }
+        $packageStatusList += [PSCustomObject]@{
+            DisplayName  = if ($pkg.name) { $pkg.name } else { $pkg.installId }
+            Package      = $pkg
+            Status       = $status
+            VersionInfo  = $versionInfo
+            IsUpgradable = $isUpgradable
+        }
+    }
+    return $packageStatusList
+}
 
-        $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --disable-interactivity --accept-source-agreements --include-unknown" -Activity "Buscando actualizaciones de Winget"
+function _Get-WingetPackageStatus {
+    param([array]$CatalogPackages)
 
-        $installedLines = $listResult.Output -split "`n" | Select-Object -Skip 2
-        $upgradeLines = if ($upgradeResult.Success) { $upgradeResult.Output -split "`n" | Select-Object -Skip 2 } else { @() }
+    $installedPackages = @{}
+    $outdatedPackages = @{}
 
-        foreach ($pkg in $CatalogPackages) {
-            $checkId = if ($pkg.checkName) { $pkg.checkName } else { $pkg.installId }
-            $regexId = [regex]::Escape($checkId)
+    $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --disable-interactivity --accept-source-agreements" -Activity "Consultando paquetes de Winget"
+    if (-not $listResult.Success) {
+        Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados con Winget."
+        return $null
+    }
 
-            foreach ($line in $installedLines) {
-                if ($line -match "^$regexId\s+") {
-                    $parts = $line -split '\s{2,}' | Where-Object {$_}
-                    if ($parts.Count -ge 2) {
-                        $installedPackages[$pkg.installId] = $parts[1]
-                    }
-                    break
-                }
+    $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --disable-interactivity --accept-source-agreements --include-unknown" -Activity "Buscando actualizaciones de Winget"
+
+    # Omitir las primeras líneas y la línea de guiones del encabezado
+    $installedLines = $listResult.Output -split "`n" | Select-Object -Skip 2
+    $upgradeLines = if ($upgradeResult.Success) { $upgradeResult.Output -split "`n" | Select-Object -Skip 2 } else { @() }
+
+    foreach ($pkg in $CatalogPackages) {
+        $checkId = if ($pkg.checkName) { $pkg.checkName } else { $pkg.installId }
+        $regexId = [regex]::Escape($checkId)
+
+        foreach ($line in $installedLines) {
+            if ($line -match "^$regexId\s+") {
+                $parts = $line -split '\s{2,}' | Where-Object {$_}
+                if ($parts.Count -ge 2) { $installedPackages[$pkg.installId] = $parts[1] }
+                break
             }
-            foreach ($line in $upgradeLines) {
-                if ($line -match "^$regexId\s+") {
-                    $parts = $line -split '\s{2,}' | Where-Object {$_}
-                    if ($parts.Count -ge 3) {
-                        $outdatedPackages[$pkg.installId] = @{ Current = $parts[1]; Available = $parts[2] }
-                    }
-                    break
-                }
+        }
+        foreach ($line in $upgradeLines) {
+            if ($line -match "^$regexId\s+") {
+                $parts = $line -split '\s{2,}' | Where-Object {$_}
+                if ($parts.Count -ge 3) { $outdatedPackages[$pkg.installId] = @{ Current = $parts[1]; Available = $parts[2] } }
+                break
             }
         }
     }
 
+    # Procesamiento final (común a ambos)
+    $packageStatusList = @()
     foreach ($pkg in $CatalogPackages) {
         $installId = $pkg.installId
         $status = "No Instalado"
@@ -134,7 +167,12 @@ function Invoke-SoftwareManagerUI {
         Show-Header -Title "FASE 2: Administrador de Paquetes ($Manager)" -NoClear
 
         Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para $Manager..."
-        $packageStatusList = _Get-PackageStatus -Manager $Manager -CatalogPackages $catalogPackages
+        $packageStatusList = if ($Manager -eq 'Chocolatey') {
+            _Get-ChocolateyPackageStatus -CatalogPackages $catalogPackages
+        } else {
+            _Get-WingetPackageStatus -CatalogPackages $catalogPackages
+        }
+
         if ($null -eq $packageStatusList) {
             Write-Styled -Type Error -Message "No se pudo continuar debido a un error al obtener el estado de los paquetes."
             Pause-And-Return
