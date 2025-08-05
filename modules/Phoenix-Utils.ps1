@@ -92,20 +92,31 @@ function Invoke-JobWithTimeout {
     $idleTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $idleTimeout = New-TimeSpan -Seconds $IdleTimeoutSeconds
     $lastOutputCount = 0
+    $lastPercentage = -1
 
     while ($job.State -eq 'Running' -and $idleTimer.Elapsed -lt $idleTimeout) {
-        $status = "Tiempo de inactividad restante: $(($idleTimeout - $idleTimer.Elapsed).ToString('mm\:ss'))"
-        Write-Progress -Activity $Activity -Status $status
+        $status = "Tiempo de inactividad restante antes de cancelar: $(($idleTimeout - $idleTimer.Elapsed).ToString('mm\:ss'))"
 
-        # Comprobar si hay nueva salida
+        # Para trabajos que sí reportan progreso, esto lo mostraría.
+        # Para los nuestros, que no lo hacen, el porcentaje se basará en el tiempo.
+        $percent = if ($job.Progress.Count -gt 0) { $job.Progress[0].PercentComplete } else { -1 }
+        Write-Progress -Activity $Activity -Status $status -PercentComplete $percent
+
+        # Lógica de accesibilidad: Escribir el porcentaje en la consola para lectores de pantalla
+        if ($percent -ne $lastPercentage) {
+            Write-Host "`rProgreso: $percent%" -NoNewline
+            $lastPercentage = $percent
+        }
+
         if ($job.ChildJobs[0].Output.Count -gt $lastOutputCount) {
-            $idleTimer.Restart() # Reiniciar el temporizador de inactividad
+            $idleTimer.Restart()
             $lastOutputCount = $job.ChildJobs[0].Output.Count
         }
 
         Start-Sleep -Milliseconds 500
     }
     Write-Progress -Activity $Activity -Completed
+    Write-Host "`r" # Limpiar la línea de progreso de accesibilidad
 
     $result = [PSCustomObject]@{
         Success = $false

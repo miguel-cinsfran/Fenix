@@ -34,10 +34,10 @@ function Execute-InstallJob {
         $jobOutput = $result.Output
         if ($Manager -eq 'Chocolatey' -and ($jobOutput -match "not found|was not found")) {
             $state.FatalErrorOccurred = $true
-            Write-Styled -Type Error -Message "Falló la instalación de $PackageName: Chocolatey no pudo encontrar el paquete."
+            Write-Styled -Type Error -Message "Falló la instalación de ${PackageName}: Chocolatey no pudo encontrar el paquete."
         } elseif ($Manager -eq 'Winget' -and ($jobOutput -match "No se encontró ningún paquete|No package found")) {
             $state.FatalErrorOccurred = $true
-            Write-Styled -Type Error -Message "Falló la instalación de $PackageName: Winget no pudo encontrar el paquete."
+            Write-Styled -Type Error -Message "Falló la instalación de ${PackageName}: Winget no pudo encontrar el paquete."
         } else {
             Write-Styled -Type Success -Message "Instalación de $PackageName finalizada."
         }

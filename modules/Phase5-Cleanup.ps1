@@ -78,7 +78,11 @@ function _Invoke-AnalyzeProcesses {
 
 function _Invoke-SetDNS {
     param($Task)
-    Write-Styled -Type SubStep -Message "Cambiando DNS a: $($Task.details.name) ($($Task.details.servers -join ', '))..."
+    Write-Styled -Type Info -Message "Los servidores DNS públicos como Cloudflare o Google pueden ofrecer mayor velocidad y privacidad que los de su proveedor de internet."
+    Write-Styled -Type Consent -Message "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))? (S/N)"
+    if ((Read-Host).Trim().ToUpper() -ne 'S') { Write-Styled -Type Warn -Message "Operación cancelada."; Pause-And-Return; return }
+
+    Write-Styled -Type SubStep -Message "Cambiando DNS a: $($Task.details.name)..."
     Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Set-DnsClientServerAddress -ServerAddresses ($Task.details.servers)
     Write-Styled -Type Success -Message "DNS cambiado correctamente."
     Pause-And-Return
