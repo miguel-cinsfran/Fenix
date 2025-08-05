@@ -45,7 +45,6 @@ function Invoke-Phase4_WSL {
             if ($wslSubsystem.State -ne 'Enabled') { $featuresToEnable += "Microsoft-Windows-Subsystem-Linux" }
 
             if ($featuresToEnable.Count -gt 0) {
-                # Caso A: Las características no están habilitadas.
                 Write-Styled -Type Warn -Message "Las siguientes características de Windows son necesarias y no están habilitadas:"
                 $featuresToEnable | ForEach-Object { Write-Styled -Type Info -Message "  - $_" }
                 if ((Read-Host "¿Autoriza al script a habilitar estas características? (S/N)").Trim().ToUpper() -eq 'S') {
@@ -59,7 +58,6 @@ function Invoke-Phase4_WSL {
                 return $state
             }
 
-            # Caso B: Las características SÍ están habilitadas, pero 'wsl --status' falló.
             Write-Styled -Type Success -Message "Todos los prerrequisitos de Windows ya están habilitados."
             Write-Styled -Type Step -Message "Procediendo con la instalación de WSL y la distribución de Ubuntu por defecto..."
             $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install" -FailureStrings "Error" -Activity "Instalando WSL y Ubuntu"
@@ -74,7 +72,7 @@ function Invoke-Phase4_WSL {
         } else {
             Write-Styled -Type Success -Message "WSL ya está instalado y operativo."
             Write-Styled -Type Step -Message "Actualizando WSL al núcleo más reciente..."
-            Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--update" -Activity "Actualizando WSL" | Out-Null # El éxito no es crítico aquí
+            Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--update" -Activity "Actualizando WSL" | Out-Null
 
             Write-Styled -Type Step -Message "Verificando distribuciones instaladas..."
             $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones"

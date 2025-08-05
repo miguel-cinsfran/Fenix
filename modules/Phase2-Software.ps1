@@ -5,11 +5,11 @@
     Contiene la lógica para cargar catálogos de Chocolatey y Winget, y presenta
     un submenú para permitir la instalación granular o completa de los paquetes.
 .NOTES
-    Versión: 1.0
+    Versión: 2.0
     Autor: miguel-cinsfran
 #>
 
-function Execute-InstallJob {
+function _Execute-SoftwareJob {
     param(
         [string]$PackageName,
         [string]$Executable,
@@ -20,18 +20,18 @@ function Execute-InstallJob {
 
     # Deshabilitar el timeout de inactividad para instalaciones de software,
     # ya que pueden tener largos periodos de descarga sin actividad en la consola.
-    $result = Invoke-NativeCommand -Executable $Executable -ArgumentList $ArgumentList -FailureStrings $FailureStrings -Activity "Instalando $PackageName" -IdleTimeoutEnabled $false
+    $result = Invoke-NativeCommand -Executable $Executable -ArgumentList $ArgumentList -FailureStrings $FailureStrings -Activity "Ejecutando: $($Executable) $($ArgumentList)" -IdleTimeoutEnabled $false
 
     if (-not $result.Success) {
         $state.FatalErrorOccurred = $true
-        Write-Styled -Type Error -Message "Falló la instalación de $PackageName."
+        Write-Styled -Type Error -Message "Falló la operación para $PackageName."
         if ($result.Output) {
             Write-Styled -Type Log -Message "--- INICIO DE SALIDA DEL PROCESO ---"
             $result.Output | ForEach-Object { Write-Styled -Type Log -Message $_ }
             Write-Styled -Type Log -Message "--- FIN DE SALIDA DEL PROCESO ---"
         }
     } else {
-        Write-Styled -Type Success -Message "Instalación de $PackageName finalizada."
+        Write-Styled -Type Success -Message "Operación para $PackageName finalizada."
     }
 }
 
@@ -54,33 +54,28 @@ function _Get-PackageStatus {
         $outdatedResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "outdated --limit-output" -Activity "Buscando actualizaciones de Chocolatey"
         if ($outdatedResult.Success) {
             $outdatedResult.Output -split "`n" | ForEach-Object { $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id.Trim()] = @{ Current = $current.Trim(); Available = $available.Trim() } } }
-        } # No es un error fatal si esto falla, podría no haber ninguno desactualizado.
+        }
 
     } else { # Winget
-        # El método de consultar paquete por paquete es más lento pero mucho más fiable que parsear la tabla completa.
         foreach ($pkg in $CatalogPackages) {
             Write-Progress -Activity "Consultando paquetes de Winget" -Status "Consultando: $($pkg.installId)"
             $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --id $($pkg.installId) --accept-source-agreements" -Activity "Consultando $($pkg.installId)"
 
             if ($listResult.Success -and $listResult.Output -match "No se encontraron paquetes que coincidan con los criterios de entrada") {
-                # El paquete no está instalado. No hacer nada.
+                # El paquete no está instalado.
             } elseif ($listResult.Success) {
-                # El paquete está instalado, intentar extraer la versión. La salida de Winget es una tabla,
-                # por lo que buscamos la línea que contiene el ID y luego extraemos el patrón de versión.
                 $versionLine = $listResult.Output -split "`n" | Where-Object { $_ -match $pkg.installId }
-                if ($versionLine -match "v?(\d+(\.\d+)+)") { # Hacer la 'v' opcional
+                if ($versionLine -match "v?(\d+(\.\d+)+)") {
                     $installedPackages[$pkg.installId] = $matches[1]
                 }
             }
 
-            # Ahora, comprobar si hay actualizaciones para este paquete específico.
             $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --id $($pkg.installId) --accept-source-agreements" -Activity "Buscando actualización para $($pkg.installId)"
             if ($upgradeResult.Success -and $upgradeResult.Output -match "No hay actualizaciones disponibles") {
-                # No hay actualizaciones. No hacer nada.
+                # No hay actualizaciones.
             } elseif ($upgradeResult.Success) {
-                # La salida de 'winget upgrade' para un paquete específico tiene un formato diferente.
                 $versionLine = $upgradeResult.Output -split "`n" | Where-Object { $_ -match $pkg.installId }
-                if ($versionLine -match "v?(\d+(\.\d+)+)\s+v?(\d+(\.\d+)+)") { # Hacer la 'v' opcional
+                if ($versionLine -match 'v?(\d+(\.\d+)+)\s+v?(\d+(\.\d+)+)') {
                      $outdatedPackages[$pkg.installId] = @{ Current = $matches[1]; Available = $matches[2] }
                 }
             }
@@ -133,12 +128,11 @@ function Invoke-SoftwareManagerUI {
         Show-Header -Title "FASE 2: Administrador de Paquetes ($Manager)"
 
         $packageStatusList = _Get-PackageStatus -Manager $Manager -CatalogPackages $catalogPackages
-        if ($null -eq $packageStatusList) { return } # Salir si la obtención de estado falla
+        if ($null -eq $packageStatusList) { return }
 
         Write-Styled -Type Title -Message "Estado de paquetes del catálogo:"
         $packageStatusList | Format-Table -Property DisplayName, Status, VersionInfo -AutoSize
 
-        # --- Menú Dinámico ---
         $menuOptions = @{}
         if (($packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }).Count -gt 0) {
             $menuOptions['I'] = "Instalar TODOS los paquetes pendientes"
@@ -159,7 +153,6 @@ function Invoke-SoftwareManagerUI {
 
         $choice = Invoke-MenuPrompt -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" })
 
-        # --- Lógica de Acciones ---
         switch ($choice) {
             'I' {
                 $packagesToProcess = $packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }
@@ -169,11 +162,11 @@ function Invoke-SoftwareManagerUI {
                     if ($Manager -eq 'Chocolatey') {
                         $chocoArgs = @("install", $pkg.installId, "-y", "--no-progress")
                         if ($pkg.special_params) { $chocoArgs += "--params='$($pkg.special_params)'" }
-                        Execute-InstallJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+                        _Execute-SoftwareJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
                     } else { # Winget
                         $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
                         if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
-                        Execute-InstallJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+                        _Execute-SoftwareJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
                     }
                 }
             }
@@ -184,10 +177,10 @@ function Invoke-SoftwareManagerUI {
                     $pkg = $item.Package
                     if ($Manager -eq 'Chocolatey') {
                         $chocoArgs = @("upgrade", $pkg.installId, "-y", "--no-progress")
-                        Execute-InstallJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+                        _Execute-SoftwareJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
                     } else { # Winget
                         $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
-                        Execute-InstallJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+                        _Execute-SoftwareJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
                     }
                 }
             }
@@ -203,10 +196,10 @@ function Invoke-SoftwareManagerUI {
                     if ((Read-Host "¿Está seguro que desea desinstalar $($item.DisplayName)? (S/N)").Trim().ToUpper() -eq 'S') {
                         if ($Manager -eq 'Chocolatey') {
                             $chocoArgs = @("uninstall", $pkg.installId, "-y")
-                            Execute-InstallJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+                            _Execute-SoftwareJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
                         } else { # Winget
                             $wingetArgs = @("uninstall", "--id", $pkg.installId, "--silent")
-                            Execute-InstallJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+                            _Execute-SoftwareJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
                         }
                     }
                 }

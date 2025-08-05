@@ -75,10 +75,9 @@ function _Invoke-AnalyzeProcesses {
     foreach ($p in $processes) {
         $cpuTime = 0
         try {
-            # El acceso a TotalProcessorTime puede fallar para algunos procesos del sistema (p.ej. Idle)
             $cpuTime = $p.TotalProcessorTime.TotalSeconds
         } catch {
-            # Simplemente dejar en 0 si hay un error de acceso
+            # Silently ignore access denied errors
         }
         $processList += [PSCustomObject]@{
             Name = $p.ProcessName
