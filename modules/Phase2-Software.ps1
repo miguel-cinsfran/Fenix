@@ -3,12 +3,13 @@
     Módulo de Fase 2 para la instalación de software desde manifiestos.
 .DESCRIPTION
     Contiene la lógica para cargar catálogos de Chocolatey y Winget, y presenta
-    un submenú para permitir la instalación granular o completa de los paquetes.
+    una interfaz de usuario interactiva para listar, instalar y actualizar paquetes.
 .NOTES
-    Versión: 2.0
+    Versión: 2.1
     Autor: miguel-cinsfran
 #>
 
+# Mantener la función original de ejecución de trabajos, como se prefiera.
 function Execute-InstallJob {
     param(
         [string]$PackageName, 
@@ -35,25 +36,16 @@ function Execute-InstallJob {
             $failureReason = "El estado del trabajo fue '$($job.State)'."
         } else {
             if ($Manager -eq 'Chocolatey') {
-                if ($jobOutput -match "not found|was not found") {
-                    $jobFailed = $true
-                    $failureReason = "Chocolatey no pudo encontrar el paquete."
-                }
+                if ($jobOutput -match "not found|was not found") { $jobFailed = $true; $failureReason = "Chocolatey no pudo encontrar el paquete." }
             }
             elseif ($Manager -eq 'Winget') {
-                if ($jobOutput -match "No se encontró ningún paquete|No package found") {
-                    $jobFailed = $true
-                    $failureReason = "Winget no pudo encontrar el paquete."
-                }
+                if ($jobOutput -match "No se encontró ningún paquete|No package found") { $jobFailed = $true; $failureReason = "Winget no pudo encontrar el paquete." }
             }
         }
 
         if ($jobFailed) {
             $state.FatalErrorOccurred = $true
             Write-Styled -Type Error -Message "Falló la instalación de $PackageName. Razón: $failureReason"
-            Write-Styled -Type Log -Message "--- INICIO DE EVIDENCIA DE ERROR CRUDO PARA '$PackageName' ---"
-            $jobOutput | ForEach-Object { Write-Styled -Type Log -Message $_ }
-            Write-Styled -Type Log -Message "--- FIN DE EVIDENCIA DE ERROR CRUDO ---"
         } else {
             Write-Styled -Type Success -Message "Instalación de $PackageName finalizada."
         }
@@ -68,34 +60,50 @@ function _Get-PackageStatus {
         [array]$CatalogPackages
     )
 
-    Write-Styled -Type Info -Message "Obteniendo estado de los paquetes... (Esto puede tardar unos segundos)"
+    Write-Styled -Type Info -Message "Obteniendo estado de los paquetes... (Esto puede tardar hasta 2 minutos por comando)"
 
     $installedPackages = @{}
-    if ($Manager -eq 'Chocolatey') {
-        $jobResult = Invoke-JobWithTimeout -ScriptBlock { choco list --limit-output --local-only } -Activity "Consultando paquetes de Chocolatey"
-        if ($jobResult.Success) {
-            $jobResult.Output | ForEach-Object { $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id] = $version } }
-        }
-    } else {
-        # Lógica para Winget...
-    }
-
     $outdatedPackages = @{}
+
     if ($Manager -eq 'Chocolatey') {
-        $jobResult = Invoke-JobWithTimeout -ScriptBlock { choco outdated --limit-output } -Activity "Buscando actualizaciones de Chocolatey"
-        if ($jobResult.Success) {
-            $jobResult.Output | ForEach-Object { $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id] = @{ Current = $current; Available = $available } } }
+        $listResult = Invoke-JobWithTimeout -ScriptBlock { choco list --limit-output --local-only } -Activity "Consultando paquetes de Chocolatey"
+        if ($listResult.Success) {
+            $listResult.Output | ForEach-Object { $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id.Trim()] = $version.Trim() } }
+        } else { Write-Styled -Type Error -Message "Timeout: No se pudo obtener la lista de paquetes instalados."; return $null }
+
+        $outdatedResult = Invoke-JobWithTimeout -ScriptBlock { choco outdated --limit-output } -Activity "Buscando actualizaciones de Chocolatey"
+        if ($outdatedResult.Success) {
+            $outdatedResult.Output | ForEach-Object { $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id.Trim()] = @{ Current = $current.Trim(); Available = $available.Trim() } } }
+        } else { Write-Styled -Type Error -Message "Timeout: No se pudo obtener la lista de paquetes desactualizados."; return $null }
+
+    } else { # Winget
+        # La lógica de Winget es más compleja y se mantiene directa por ahora.
+        $installedOutput = winget list --disable-interactivity --accept-source-agreements
+        $upgradeOutput = winget upgrade --disable-interactivity --accept-source-agreements --include-unknown
+
+        foreach ($pkg in $CatalogPackages) {
+            $regexId = [regex]::Escape($pkg.installId)
+            foreach ($line in $installedOutput) {
+                if ($line -match "^(.+?)\s+($regexId)\s+([^\s]+)") {
+                    $installedPackages[$pkg.installId] = $matches[3]
+                    break
+                }
+            }
+            foreach ($line in $upgradeOutput) {
+                if ($line -match "^(.+?)\s+($regexId)\s+([^\s]+)\s+([^\s]+)") {
+                    $outdatedPackages[$pkg.installId] = @{ Current = $matches[3]; Available = $matches[4] }
+                    break
+                }
+            }
         }
-    } else {
-        # Lógica para Winget...
     }
 
-    $packageStatusList = foreach ($pkg in $CatalogPackages) {
+    return foreach ($pkg in $CatalogPackages) {
+        $installId = $pkg.installId
         $status = "No Instalado"
         $versionInfo = ""
         $isUpgradable = $false
 
-        $installId = $pkg.installId
         if ($outdatedPackages.ContainsKey($installId)) {
             $status = "Actualización Disponible"
             $versionInfo = "(v$($outdatedPackages[$installId].Current) -> v$($outdatedPackages[$installId].Available))"
@@ -113,9 +121,7 @@ function _Get-PackageStatus {
             IsUpgradable = $isUpgradable
         }
     }
-    return $packageStatusList
 }
-
 
 function _Handle-SoftwareAction {
     param(
@@ -138,7 +144,7 @@ function _Handle-SoftwareAction {
 
     for ($i = 0; $i -lt $PackagesToAction.Count; $i++) {
         $item = $PackagesToAction[$i]
-        Write-Host ("[{0,2}] {1,-35}" -f ($i + 1), $item.DisplayName)
+        Write-Host ("[{0,2}] {1,-35} {2}" -f ($i + 1), $item.DisplayName, $item.VersionInfo)
     }
     Write-Host
     Write-Styled -Type Consent -Message "[A] $($actionVerb.ToUpper()) TODOS los paquetes listados"
@@ -151,12 +157,7 @@ function _Handle-SoftwareAction {
 
     if ($choice -eq '0') { return }
 
-    $packagesToProcess = @()
-    if ($choice -eq 'A') {
-        $packagesToProcess = $PackagesToAction
-    } else {
-        $packagesToProcess = @($PackagesToAction[[int]$choice - 1])
-    }
+    $packagesToProcess = if ($choice -eq 'A') { $PackagesToAction } else { @($PackagesToAction[[int]$choice - 1]) }
 
     foreach ($item in $packagesToProcess) {
         if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "Abortando debido a error previo."; break }
@@ -170,6 +171,7 @@ function _Handle-SoftwareAction {
             Execute-InstallJob -PackageName $item.DisplayName -InstallBlock { & choco $using:chocoArgs } -state $state -Manager 'Chocolatey'
         }
         elseif ($Manager -eq 'Winget') {
+            # Winget usa 'install' tanto para instalar como para actualizar.
             $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements")
             if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
             Execute-InstallJob -PackageName $item.DisplayName -InstallBlock { & winget $using:wingetArgs } -state $state -Manager 'Winget'
@@ -207,7 +209,10 @@ function Invoke-SoftwareManagerUI {
         Write-Host
         $mainChoice = Invoke-MenuPrompt -ValidChoices @('1', '2', '0') -PromptMessage "Seleccione una acción"
 
+        if ($mainChoice -eq '0') { $exitManagerUI = $true; continue }
+
         $packageStatusList = _Get-PackageStatus -Manager $Manager -CatalogPackages $catalogPackages
+        if ($null -eq $packageStatusList) { continue } # Si la obtención de estado falló, volver al menú
 
         switch ($mainChoice) {
             '1' {
@@ -217,9 +222,6 @@ function Invoke-SoftwareManagerUI {
             '2' {
                 $upgradablePackages = $packageStatusList | Where-Object { $_.IsUpgradable }
                 _Handle-SoftwareAction -Action "Upgrade" -Manager $Manager -PackagesToAction $upgradablePackages -state $state
-            }
-            '0' {
-                $exitManagerUI = $true
             }
         }
     }

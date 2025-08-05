@@ -43,6 +43,8 @@ try {
     . (Join-Path $modulesPath "Phase1-OneDrive.ps1")
     . (Join-Path $modulesPath "Phase2-Software.ps1")
     . (Join-Path $modulesPath "Phase3-Tweaks.ps1")
+    . (Join-Path $modulesPath "Phase4-WSL.ps1")
+    . (Join-Path $modulesPath "Phase5-Cleanup.ps1")
 } catch {
     Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$modulesPath'." -F Red
     Write-Host "Error original: $($_.Exception.Message)" -F Red
@@ -59,6 +61,8 @@ function New-CleanState {
         OneDriveErradicated = $false
         SoftwareInstalled   = $false
         TweaksApplied       = $false
+        WSLInstalled        = $false
+        CleanupPerformed    = $false
         FatalErrorOccurred  = $false
         ManualActions       = [System.Collections.Generic.List[string]]::new()
     }
@@ -78,7 +82,7 @@ if (Test-Path $stateFile) {
         }
         Write-Styled -Type Step -Message "`n[1] Continuar con la sesión anterior."
         Write-Styled -Type Step -Message "[2] Empezar una sesión limpia (elimina el estado guardado)."
-        $userChoice = Read-Host "`nSeleccione una opción"
+        $userChoice = Read-Host -Prompt "Seleccione una opción"
         if ($userChoice -eq '2') {
             Write-Styled -Type Info -Message "Eliminando estado anterior y comenzando de nuevo..."
             Remove-Item $stateFile -Force
@@ -124,6 +128,24 @@ $mainMenuOptions = @(
             return $s
         }
         StatusCheck = { param($s) $s.TweaksApplied }
+    },
+    [PSCustomObject]@{
+        Description = "Ejecutar FASE 4: Instalación de WSL2"
+        Action = {
+            param($s)
+            $s = Invoke-Phase4_WSL -state $s
+            return $s
+        }
+        StatusCheck = { param($s) $s.WSLInstalled }
+    },
+    [PSCustomObject]@{
+        Description = "Ejecutar FASE 5: Limpieza del Sistema"
+        Action = {
+            param($s)
+            $s = Invoke-Phase5_Cleanup -state $s -CatalogPath $catalogsPath
+            return $s
+        }
+        StatusCheck = { param($s) $s.CleanupPerformed }
     }
 )
 
