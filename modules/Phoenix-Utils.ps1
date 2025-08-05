@@ -31,9 +31,12 @@ $Global:Theme = @{
 
 # FUNCIONES DE UI
 function Show-Header {
-    param([string]$TitleText)
+    param(
+        [string]$TitleText,
+        [switch]$NoClear
+    )
     $underline = "$([char]27)[4m"; $reset = "$([char]27)[0m"
-    Clear-Host
+    if (-not $NoClear) { Clear-Host }
     Write-Host; Write-Host "$underline$TitleText$reset" -F $Global:Theme.Title; Write-Host "---" -F $Global:Theme.Subtle; Write-Host
 }
 
@@ -94,17 +97,19 @@ function Invoke-JobWithTimeout {
     $lastOutputCount = 0
     $lastPercentage = -1
 
+    Write-Styled -Type Info -Message "Iniciando tarea en segundo plano: $Activity"
     while ($job.State -eq 'Running' -and $idleTimer.Elapsed -lt $idleTimeout) {
         $status = "Tiempo de inactividad restante antes de cancelar: $(($idleTimeout - $idleTimer.Elapsed).ToString('mm\:ss'))"
 
-        # Para trabajos que sí reportan progreso, esto lo mostraría.
-        # Para los nuestros, que no lo hacen, el porcentaje se basará en el tiempo.
         $percent = if ($job.Progress.Count -gt 0) { $job.Progress[0].PercentComplete } else { -1 }
+
+        # El Write-Progress es útil visualmente, pero el Write-Host es clave para la accesibilidad.
         Write-Progress -Activity $Activity -Status $status -PercentComplete $percent
 
-        # Lógica de accesibilidad: Escribir el porcentaje en la consola para lectores de pantalla
-        if ($percent -ne $lastPercentage) {
-            Write-Host "`rProgreso: $percent%" -NoNewline
+        if ($percent -ge 0 -and $percent -ne $lastPercentage) {
+            # \r mueve el cursor al inicio de la línea para que la siguiente escritura la sobreescriba.
+            # Se añade un espacio al final para limpiar cualquier carácter residual si la línea se acorta.
+            Write-Host "`rProgreso de la tarea: $percent% " -NoNewline
             $lastPercentage = $percent
         }
 
@@ -116,7 +121,8 @@ function Invoke-JobWithTimeout {
         Start-Sleep -Milliseconds 500
     }
     Write-Progress -Activity $Activity -Completed
-    Write-Host "`r" # Limpiar la línea de progreso de accesibilidad
+    # Limpiar la línea de progreso de texto al finalizar
+    Write-Host "`r" + (" " * 50) + "`r"
 
     $result = [PSCustomObject]@{
         Success = $false

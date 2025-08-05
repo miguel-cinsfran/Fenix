@@ -11,19 +11,15 @@
         },
         {
             "id": "EmptyRecycleBin",
-            "description": "Vaciar la Papelera de Reciclaje",
-            "type": "SimpleCommand",
-            "details": {
-                "command": "Clear-RecycleBin -Force -ErrorAction SilentlyContinue"
-            }
+            "description": "Vaciar la Papelera de Reciclaje (conteo y tamaño)",
+            "type": "RecycleBinCleanup",
+            "details": {}
         },
         {
             "id": "CleanupWinUpdate",
-            "description": "Eliminar archivos residuales de Windows Update",
-            "type": "SimpleCommand",
-            "details": {
-                "command": "Dism.exe /Online /English /Cleanup-Image /StartComponentCleanup"
-            }
+            "description": "Eliminar archivos residuales de Windows Update (limpieza profunda)",
+            "type": "WindowsUpdateCleanup",
+            "details": {}
         },
         {
             "id": "OptimizeDisks",
