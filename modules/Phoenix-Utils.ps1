@@ -67,55 +67,18 @@ function Invoke-MenuPrompt {
             }
 
             # La manipulación del cursor con ANSI es frágil. Un mensaje de error simple es más seguro.
-            Write-Host " [ERROR] Opción no válida. Por favor, intente de nuevo." -ForegroundColor $Global:Theme.Error
-            Start-Sleep -Seconds 1
-            # El bucle se repetirá, el menú se volverá a dibujar y el prompt aparecerá de nuevo.
-            # Esto es un poco más 'ruidoso' para el usuario, pero evita que la entrada se bloquee.
-            # En este caso, la robustez es más importante que la elegancia visual.
+            Write-Host "`n [ERROR] Opción no válida. Por favor, intente de nuevo." -ForegroundColor $Global:Theme.Error
+            Start-Sleep -Seconds 2
+
+            # Limpiar las líneas de error y el prompt anterior para la siguiente iteración
+            $up = $Global:Theme.Control.Up
+            $clear = $Global:Theme.Control.ClearLine
+            Write-Host "${up}${clear}${up}${clear}" -NoNewline
         }
     } catch [System.Management.Automation.PipelineStoppedException] {
         # Capturada por el manejador de Ctrl+C del lanzador, simplemente re-lanzar.
         throw
     }
-}
-
-function Invoke-JobWithTimeout {
-    param(
-        [scriptblock]$ScriptBlock,
-        [int]$TimeoutSeconds = 120,
-        [string]$Activity = "Ejecutando operación en segundo plano..."
-    )
-
-    $job = Start-Job -ScriptBlock $ScriptBlock
-    $timer = [System.Diagnostics.Stopwatch]::StartNew()
-    $timeout = New-TimeSpan -Seconds $TimeoutSeconds
-
-    while ($job.State -eq 'Running' -and $timer.Elapsed -lt $timeout) {
-        Write-Progress -Activity $Activity -Status "Tiempo restante: $(($timeout - $timer.Elapsed).ToString('mm\:ss'))" -PercentComplete (($timer.Elapsed.TotalSeconds / $TimeoutSeconds) * 100)
-        Start-Sleep -Milliseconds 250
-    }
-    Write-Progress -Activity $Activity -Completed
-
-    $result = [PSCustomObject]@{
-        Success = $false
-        Output = @()
-        Error = ""
-    }
-
-    if ($job.State -eq 'Running') {
-        $result.Error = "La operación excedió el tiempo de espera de $TimeoutSeconds segundos y fue terminada."
-        Stop-Job $job -Force
-    }
-    elseif ($job.State -eq 'Failed') {
-        $result.Error = ($job.Error | Select-Object -First 1).Exception.Message
-    }
-    else {
-        $result.Success = $true
-    }
-
-    $result.Output = Receive-Job $job
-    Remove-Job $job -Force
-    return $result
 }
 
 

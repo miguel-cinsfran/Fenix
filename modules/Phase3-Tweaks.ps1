@@ -5,7 +5,7 @@
     Presenta un menú interactivo de "tweaks" del sistema, con verificación de estado
     precisa y manejo de errores robusto (en teoría), incluyendo manipulación de ACL para claves protegidas.
 .NOTES
-    Versión: 4.0
+    Versión: 3.1 (Me re costo)
     Autor: miguel-cinsfran
 #>
 
@@ -73,45 +73,37 @@ function Apply-ProtectedRegistryTweak {
     $details = $Tweak.details
     $success = $false
     $keyPath = $details.path
-    $originalSddl = $null
+    $originalOwnerSid = $null
 
     try {
         if (-not (Test-Path $keyPath)) {
             New-Item -Path $keyPath -Force | Out-Null
         }
-
-        # --- Tomar Control ---
-        $acl = Get-Acl -Path $keyPath
-        $originalSddl = $acl.Sddl # Guardar el estado original completo como SDDL.
-
+        $acl = Get-Acl $keyPath
+        $ownerAccount = New-Object System.Security.Principal.NTAccount($acl.Owner)
+        $originalOwnerSid = $ownerAccount.Translate([System.Security.Principal.SecurityIdentifier])
         $administratorsSid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-32-544")
         $acl.SetOwner($administratorsSid)
-
         $rule = New-Object System.Security.AccessControl.RegistryAccessRule($administratorsSid, "FullControl", "Allow")
-        $acl.AddAccessRule($rule)
-
+        $acl.SetAccessRule($rule)
         Set-Acl -Path $keyPath -AclObject $acl -ErrorAction Stop
-
-        # --- Realizar Operación ---
         New-ItemProperty -Path $details.path -Name $details.name -Value $details.value -PropertyType $details.valueType -Force -ErrorAction Stop
-
         $success = $true
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
-
     } catch {
         Write-Host " [FALLO]" -F $Global:Theme.Error
         Write-Styled -Type Log -Message "Error al aplicar '$($Tweak.id)': $($_.Exception.Message)"
     } finally {
-        # --- Restaurar Permisos Originales ---
-        if ($originalSddl) {
+        if ($originalOwnerSid) {
             try {
-                # Crear un nuevo objeto ACL desde el SDDL guardado y aplicarlo.
-                $restoredAcl = New-Object System.Security.AccessControl.RegistrySecurity
-                $restoredAcl.SetSecurityDescriptorSddlForm($originalSddl)
-                Set-Acl -Path $keyPath -AclObject $restoredAcl -ErrorAction Stop
+                $acl = Get-Acl $keyPath
+                $acl.SetOwner($originalOwnerSid)
+                $rule = New-Object System.Security.AccessControl.RegistryAccessRule($administratorsSid, "FullControl", "Allow")
+                $acl.RemoveAccessRule($rule)
+                Set-Acl -Path $keyPath -AclObject $acl -ErrorAction Stop
             } catch {
                 Write-Styled -Type Error -Message "FALLO CRÍTICO al restaurar permisos en '$keyPath'. Se requiere intervención manual."
-                $state.ManualActions.Add("FALLO CRÍTICO: No se pudo restaurar ACL en '$keyPath'. SDDL original: $originalSddl")
+                $state.ManualActions.Add("FALLO CRÍTICO al restaurar permisos en '$keyPath'. Propietario original SID: $($originalOwnerSid.Value)")
             }
         }
     }
