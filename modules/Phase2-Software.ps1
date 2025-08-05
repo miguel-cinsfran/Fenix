@@ -57,31 +57,31 @@ function _Get-PackageStatus {
         } # No es un error fatal si esto falla, podría no haber ninguno desactualizado.
 
     } else { # Winget
-        $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --disable-interactivity --accept-source-agreements" -Activity "Consultando paquetes de Winget"
-        if (-not $listResult.Success) { Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados."; return $null }
-
-        $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --disable-interactivity --accept-source-agreements --include-unknown" -Activity "Buscando actualizaciones de Winget"
-
-        $installedLines = $listResult.Output -split "`n"
-        $upgradeLines = if ($upgradeResult.Success) { $upgradeResult.Output -split "`n" } else { @() }
-
+        # El método de consultar paquete por paquete es más lento pero mucho más fiable que parsear la tabla completa.
         foreach ($pkg in $CatalogPackages) {
-            $checkId = if ($pkg.checkName) { $pkg.checkName } else { $pkg.installId }
-            $regexId = [regex]::Escape($checkId)
+            Write-Progress -Activity "Consultando paquetes de Winget" -Status "Consultando: $($pkg.installId)"
+            $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --id $($pkg.installId) --accept-source-agreements" -Activity "Consultando $($pkg.installId)"
 
-            foreach ($line in $installedLines) {
-                if ($line -match "^(.+?)\s+($regexId)\s+") {
-                    # Winget usa múltiples espacios, es mejor un split para la versión
-                    $version = ($line -split '\s+')[-2]
-                    $installedPackages[$pkg.installId] = $version
-                    break
+            if ($listResult.Success -and $listResult.Output -match "No se encontraron paquetes que coincidan con los criterios de entrada") {
+                # El paquete no está instalado. No hacer nada.
+            } elseif ($listResult.Success) {
+                # El paquete está instalado, intentar extraer la versión. La salida de Winget es una tabla,
+                # por lo que buscamos la línea que contiene el ID y luego extraemos el patrón de versión.
+                $versionLine = $listResult.Output -split "`n" | Where-Object { $_ -match $pkg.installId }
+                if ($versionLine -match "v?(\d+(\.\d+)+)") { # Hacer la 'v' opcional
+                    $installedPackages[$pkg.installId] = $matches[1]
                 }
             }
-            foreach ($line in $upgradeLines) {
-                if ($line -match "^(.+?)\s+($regexId)\s+") {
-                    $parts = $line -split '\s+'
-                    $outdatedPackages[$pkg.installId] = @{ Current = $parts[-3]; Available = $parts[-2] }
-                    break
+
+            # Ahora, comprobar si hay actualizaciones para este paquete específico.
+            $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --id $($pkg.installId) --accept-source-agreements" -Activity "Buscando actualización para $($pkg.installId)"
+            if ($upgradeResult.Success -and $upgradeResult.Output -match "No hay actualizaciones disponibles") {
+                # No hay actualizaciones. No hacer nada.
+            } elseif ($upgradeResult.Success) {
+                # La salida de 'winget upgrade' para un paquete específico tiene un formato diferente.
+                $versionLine = $upgradeResult.Output -split "`n" | Where-Object { $_ -match $pkg.installId }
+                if ($versionLine -match "v?(\d+(\.\d+)+)\s+v?(\d+(\.\d+)+)") { # Hacer la 'v' opcional
+                     $outdatedPackages[$pkg.installId] = @{ Current = $matches[1]; Available = $matches[2] }
                 }
             }
         }

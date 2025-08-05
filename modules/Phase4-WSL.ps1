@@ -82,7 +82,9 @@ function Invoke-Phase4_WSL {
                 Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux."
                 if ((Read-Host "¿Desea instalar la distribución recomendada (Ubuntu) ahora? (S/N)").Trim().ToUpper() -eq 'S') {
                     $installDistroResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution Ubuntu" -FailureStrings "Error" -Activity "Instalando Ubuntu"
-                    if (-not $installDistroResult.Success) { throw "Error al instalar Ubuntu: $($installDistroResult.Output)" }
+                    if (-not $installDistroResult.Success) {
+                        throw "Error al instalar Ubuntu: $($installDistroResult.Output)"
+                    }
                     Write-Styled -Type Success -Message "Ubuntu instalado correctamente."
                 }
             } else {
