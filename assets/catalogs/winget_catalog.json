@@ -2,10 +2,10 @@
     "$schema": "./catalog_schema.json",
     "items": [
         { "installId": "Microsoft.PowerShell", "name": "PowerShell Core" },
-        { "installId": "CoreyButler.NVMforWindows", "name": "NVM for Windows", "postInstallNotes": "Para NVM: Abra un NUEVO terminal y ejecute 'nvm install lts' y 'nvm use lts'." },
+        { "installId": "CoreyButler.NVMforWindows", "name": "NVM for Windows" },
         { "installId": "Microsoft.VisualStudioCode", "name": "Visual Studio Code" },
         { "installId": "9NKSQGP7F2NH", "checkName": "WhatsApp", "name": "WhatsApp", "source": "msstore" },
         { "installId": "Telegram.Unigram", "name": "Telegram (Unigram)" },
-        { "installId": "Zoom.Zoom", "name": "Zoom" },
+        { "installId": "Zoom.Zoom", "name": "Zoom" }
     ]
 }

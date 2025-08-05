@@ -5,7 +5,7 @@
     Presenta un menú interactivo de "tweaks" del sistema, con verificación de estado
     precisa y manejo de errores robusto (en teoría), incluyendo manipulación de ACL para claves protegidas.
 .NOTES
-    Versión: 3.3
+    Versión: 3.4
     Autor: miguel-cinsfran
 #>
 
@@ -151,25 +151,26 @@ function Apply-RegistryWithExplorerRestart {
 function Apply-Tweak {
     param([PSCustomObject]$Tweak)
     Write-Styled -Message "Aplicando ajuste para '$($Tweak.description)'..." -NoNewline
+    $details = $Tweak.details
     $success = $false
     
     try {
         switch ($Tweak.type) {
             'Registry' {
-                if (-not (Test-Path $Tweak.details.path)) { New-Item -Path $Tweak.details.path -Force | Out-Null }
-                New-ItemProperty -Path $Tweak.details.path -Name $details.name -Value $details.value -PropertyType $details.valueType -Force -ErrorAction Stop
+                if (-not (Test-Path $details.path)) { New-Item -Path $details.path -Force | Out-Null }
+                New-ItemProperty -Path $details.path -Name $details.name -Value $details.value -PropertyType $details.valueType -Force -ErrorAction Stop
             }
             'AppxPackage' {
-                if ($Tweak.details.state -eq 'Removed') {
-                    $package = Get-AppxPackage -Name $Tweak.details.packageName -ErrorAction SilentlyContinue
+                if ($details.state -eq 'Removed') {
+                    $package = Get-AppxPackage -Name $details.packageName -ErrorAction SilentlyContinue
                     if ($package) {
                         $package | Remove-AppxPackage -ErrorAction Stop
                     }
                 }
             }
-            'PowerPlan' { powercfg.exe /setactive $Tweak.details.schemeGuid }
-            'Service' { Set-Service -Name $Tweak.details.name -StartupType $Tweak.details.startupType -ErrorAction Stop }
-            'PowerShellCommand' { Invoke-Expression -Command "$($Tweak.details.command) $($Tweak.details.arguments)" }
+            'PowerPlan' { powercfg.exe /setactive $details.schemeGuid }
+            'Service' { Set-Service -Name $details.name -StartupType $details.startupType -ErrorAction Stop }
+            'PowerShellCommand' { Invoke-Expression -Command "$($details.command) $($details.arguments)" }
         }
         $success = $true
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
