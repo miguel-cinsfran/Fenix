@@ -1,4 +1,4 @@
-{
+﻿{
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Esquema para Catálogo de Tareas de Limpieza",
     "description": "Define una estructura para las tareas de limpieza del sistema.",
