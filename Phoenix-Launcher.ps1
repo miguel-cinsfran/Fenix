@@ -86,11 +86,19 @@ if (Test-Path $stateFile) {
         if ($userChoice -eq '2') {
             Write-Styled -Type Info -Message "Eliminando estado anterior y comenzando de nuevo..."
             Remove-Item $stateFile -Force
-            $state = New-CleanState
+            # state ya es un estado limpio, no se necesita acción
         } else {
-            Write-Styled -Type Info -Message "Restaurando sesión anterior..."
-            $state = $loadedState
+            Write-Styled -Type Info -Message "Restaurando y fusionando sesión anterior..."
+            # Fusionar el estado cargado con un estado limpio para garantizar que todas las propiedades existan.
+            # Esto proporciona compatibilidad hacia adelante si se añaden nuevas propiedades al estado.
+            foreach ($prop in $loadedState.PSObject.Properties) {
+                if ($state.PSObject.Properties.Match($prop.Name)) {
+                    $state.($prop.Name) = $prop.Value
+                }
+            }
         }
+
+        # Asegurar que ManualActions sea siempre una lista genérica para evitar errores de tipo.
         if ($state.ManualActions -and $state.ManualActions.GetType().Name -ne 'List`1') {
             $state.ManualActions = [System.Collections.Generic.List[string]]::new($state.ManualActions)
         }
@@ -150,8 +158,12 @@ $mainMenuOptions = @(
 )
 
 function Show-MainMenu {
-    param([PSCustomObject]$currentState, [array]$menuOptions)
-    Show-Header -Title "Motor de Aprovisionamiento Fénix v2.7"
+    param(
+        [PSCustomObject]$currentState,
+        [array]$menuOptions,
+        [switch]$NoClear
+    )
+    Show-Header -Title "Motor de Aprovisionamiento Fénix v2.7" -NoClear:$NoClear
     Write-Styled -Type Info -Message "Toda la salida se registrará en: $logFile`n"
     
     for ($i = 0; $i -lt $menuOptions.Count; $i++) {
@@ -178,8 +190,12 @@ if ((Read-Host -Prompt "Escriba 'ACEPTO' para confirmar que entiende los riesgos
 
 $exitMainMenu = $false
 try {
+    $firstRun = $true
     while (-not $exitMainMenu) {
-        Show-MainMenu -currentState $state -menuOptions $mainMenuOptions
+        # En la primera ejecución, el menú se muestra sin limpiar (ya que la pantalla está limpia).
+        # En las siguientes, no se limpia para evitar el parpadeo, excepto si se refresca.
+        Show-MainMenu -currentState $state -menuOptions $mainMenuOptions -NoClear:(-not $firstRun)
+        $firstRun = $false
         
         if ($state.FatalErrorOccurred) {
             Write-Styled -Type Error -Message "Un error fatal ocurrió en una fase anterior. El script no puede continuar con nuevas operaciones."
@@ -191,7 +207,7 @@ try {
         $choice = Invoke-MenuPrompt -ValidChoices $validChoices
 
         switch ($choice) {
-            'R' { continue }
+            'R' { Clear-Host; continue } # Limpiar solo al refrescar
             'Q' { $exitMainMenu = $true; continue }
             default {
                 $chosenIndex = [int]$choice - 1

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 5 para la limpieza y optimización del sistema.
 .DESCRIPTION
@@ -25,11 +25,18 @@ function _Invoke-DiskCleanup {
     Write-Styled -Type SubStep -Message "Analizando discos..."
     $drives = Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.DriveType -eq 3 -and $_.DriveLetter }
     foreach ($drive in $drives) {
-        $disk = Get-PhysicalDisk | Where-Object { $_.DeviceID -eq $drive.DriveLetter.Trim(":") }
-        $mediaType = if ($disk.MediaType -eq 'SSD') { 'SSD' } else { 'HDD' }
-        $action = if ($mediaType -eq 'SSD') { "ReTrim" } else { "Defrag" }
-        Write-Styled -Type Info -Message "Optimizando unidad $($drive.DriveLetter) ($mediaType) con la acción: $action..."
-        Optimize-Volume -DriveLetter $drive.DriveLetter.Trim(":") -Verbose -Defrag -ReTrim
+        try {
+            $physicalDisk = Get-Partition -DriveLetter $drive.DriveLetter.Trim(":") | Get-PhysicalDisk
+            $mediaType = $physicalDisk.MediaType
+            $action = if ($mediaType -eq 'SSD') { "ReTrim" } else { "Defrag" }
+
+            Write-Styled -Type Info -Message "Optimizando unidad $($drive.DriveLetter) ($mediaType) con la acción: $action..."
+            # El cmdlet Optimize-Volume selecciona la acción correcta automáticamente.
+            # Los parámetros -Defrag y -ReTrim son para forzar, pero es mejor dejar que decida.
+            Optimize-Volume -DriveLetter $drive.DriveLetter.Trim(":") -Verbose
+        } catch {
+            Write-Styled -Type Error -Message "No se pudo optimizar la unidad $($drive.DriveLetter): $($_.Exception.Message)"
+        }
     }
     Write-Styled -Type Success -Message "Optimización de discos completada."
     Pause-And-Return
@@ -61,17 +68,33 @@ function _Invoke-FindLargeFiles {
 
 function _Invoke-AnalyzeProcesses {
     param($Task)
-    # Get-Process puede tardar un poco, es mejor notificar al usuario.
     Write-Styled -Type Info -Message "Analizando procesos del sistema..."
+
+    $processList = @()
     $processes = Get-Process
+    foreach ($p in $processes) {
+        $cpuTime = 0
+        try {
+            # El acceso a TotalProcessorTime puede fallar para algunos procesos del sistema (p.ej. Idle)
+            $cpuTime = $p.TotalProcessorTime.TotalSeconds
+        } catch {
+            # Simplemente dejar en 0 si hay un error de acceso
+        }
+        $processList += [PSCustomObject]@{
+            Name = $p.ProcessName
+            Id = $p.Id
+            CPUTime = $cpuTime
+            Memory = $p.WorkingSet
+        }
+    }
 
     Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de CPU:"
-    # La propiedad CPU es dinámica, se calcula y puede ser 0 en la primera llamada.
-    # Es más fiable ordenar por TotalProcessorTime para encontrar procesos históricamente intensivos.
-    $processes | Sort-Object -Property TotalProcessorTime -Descending | Select-Object -First $Task.details.count | Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPU}}, @{Name="Memoria (MB)"; Expression={($_.WorkingSet / 1MB).ToString('F2')}} -AutoSize
+    $processList | Sort-Object -Property CPUTime -Descending | Select-Object -First $Task.details.count |
+        Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}} -AutoSize
 
     Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de Memoria (MB):"
-    $processes | Sort-Object -Property WorkingSet -Descending | Select-Object -First $Task.details.count | Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPU}}, @{Name="Memoria (MB)"; Expression={($_.WorkingSet / 1MB).ToString('F2')}} -AutoSize
+    $processList | Sort-Object -Property Memory -Descending | Select-Object -First $Task.details.count |
+        Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}} -AutoSize
 
     Pause-And-Return
 }
@@ -85,6 +108,52 @@ function _Invoke-SetDNS {
     Write-Styled -Type SubStep -Message "Cambiando DNS a: $($Task.details.name)..."
     Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Set-DnsClientServerAddress -ServerAddresses ($Task.details.servers)
     Write-Styled -Type Success -Message "DNS cambiado correctamente."
+    Pause-And-Return
+}
+
+function _Invoke-RecycleBinCleanup {
+    param($Task)
+    Write-Styled -Type SubStep -Message $Task.description
+    try {
+        $shell = New-Object -ComObject Shell.Application
+        $recycleBin = $shell.NameSpace(0xA)
+        $itemCount = $recycleBin.Items().Count
+
+        if ($itemCount -eq 0) {
+            Write-Styled -Type Success -Message "La Papelera de Reciclaje ya está vacía."
+        } else {
+            $totalSize = ($recycleBin.Items() | Measure-Object -Property Size -Sum).Sum
+            $sizeInMB = [math]::Round($totalSize / 1MB, 2)
+
+            Write-Styled -Type Info -Message "Se encontraron $itemCount objeto(s), con un tamaño total de $sizeInMB MB."
+            if ((Read-Host "¿Confirma que desea vaciar la papelera permanentemente? (S/N)").Trim().ToUpper() -eq 'S') {
+                Clear-RecycleBin -Force -ErrorAction Stop
+                Write-Styled -Type Success -Message "Se han liberado $sizeInMB MB de espacio."
+            } else {
+                Write-Styled -Type Warn -Message "Operación cancelada."
+            }
+        }
+    } catch {
+        Write-Styled -Type Error -Message "No se pudo procesar la Papelera de Reciclaje: $($_.Exception.Message)"
+    }
+    Pause-And-Return
+}
+
+function _Invoke-WindowsUpdateCleanup {
+    param($Task)
+    Write-Styled -Type SubStep -Message $Task.description
+    Write-Styled -Type Info -Message "Esta operación eliminará archivos de instalación de Windows Update que ya no son necesarios."
+    Write-Styled -Type Warn -Message "Puede liberar una cantidad significativa de espacio y puede tardar mucho tiempo."
+    if ((Read-Host "¿Desea proceder con la limpieza profunda? (S/N)").Trim().ToUpper() -eq 'S') {
+        $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /English /Cleanup-Image /StartComponentCleanup /ResetBase" -FailureStrings "Error:" -Activity "Limpiando archivos de Windows Update"
+        if ($result.Success) {
+            Write-Styled -Type Success -Message "Tarea '$($Task.description)' completada."
+        } else {
+            Write-Styled -Type Error -Message "La tarea '$($Task.description)' falló. Revise el log para más detalles."
+        }
+    } else {
+        Write-Styled -Type Warn -Message "Operación cancelada."
+    }
     Pause-And-Return
 }
 
@@ -125,11 +194,13 @@ function Invoke-Phase5_Cleanup {
         $selectedTask = $tasks[[int]$choice - 1]
 
         switch ($selectedTask.type) {
-            "SimpleCommand"    { _Invoke-SimpleCommand -Task $selectedTask }
-            "DiskCleanup"      { _Invoke-DiskCleanup }
-            "FindLargeFiles"   { _Invoke-FindLargeFiles -Task $selectedTask }
-            "AnalyzeProcesses" { _Invoke-AnalyzeProcesses -Task $selectedTask }
-            "SetDNS"           { _Invoke-SetDNS -Task $selectedTask }
+            "SimpleCommand"         { _Invoke-SimpleCommand -Task $selectedTask }
+            "DiskCleanup"           { _Invoke-DiskCleanup }
+            "FindLargeFiles"        { _Invoke-FindLargeFiles -Task $selectedTask }
+            "AnalyzeProcesses"      { _Invoke-AnalyzeProcesses -Task $selectedTask }
+            "SetDNS"                { _Invoke-SetDNS -Task $selectedTask }
+            "RecycleBinCleanup"     { _Invoke-RecycleBinCleanup -Task $selectedTask }
+            "WindowsUpdateCleanup"  { _Invoke-WindowsUpdateCleanup -Task $selectedTask }
             default {
                 Write-Styled -Type Error -Message "Tipo de tarea desconocido: '$($selectedTask.type)'"
                 Pause-And-Return

@@ -1,4 +1,4 @@
-﻿{
+{
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Esquema para Catálogos de Software del Motor de Aprovisionamiento v5.0",
     "description": "Define una estructura que prioriza la consulta por nombre para paquetes inconsistentes como los de MSStore, garantizando una verificación robusta.",
