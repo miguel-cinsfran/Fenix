@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 4 para la instalación y configuración de WSL2.
 .DESCRIPTION
@@ -44,7 +44,8 @@ function _Handle-Distro-Installation {
                 if ($installResult.Success) {
                     Write-Styled -Type Success -Message "$distroToInstall instalado correctamente."
                 } else {
-                    throw "Error al instalar $distroToInstall: $($installResult.Output)"
+                    # CORRECCIÓN: Se delimita la variable con ${} para evitar el error de sintaxis.
+                    throw "Error al instalar ${distroToInstall}: $($installResult.Output)"
                 }
             }
         }
@@ -61,7 +62,8 @@ function _Handle-Distro-Installation {
                 if ($distroToInstall) {
                     $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall"
                     if ($installResult.Success) { Write-Styled -Type Success -Message "$distroToInstall instalado correctamente." }
-                    else { throw "Error al instalar $distroToInstall: $($installResult.Output)" }
+                    # CORRECCIÓN: Se delimita la variable con ${} para evitar el error de sintaxis.
+                    else { throw "Error al instalar ${distroToInstall}: $($installResult.Output)" }
                 }
             }
         }

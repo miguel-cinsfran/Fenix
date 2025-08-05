@@ -1,4 +1,4 @@
-{
+﻿{
     "$schema": "./catalog_schema.json",
     "items": [
         { "installId": "Microsoft.PowerShell", "name": "PowerShell Core" },

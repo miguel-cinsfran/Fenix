@@ -1,0 +1,636 @@
+﻿[
+    {
+        "pageHeaderEntry":  null,
+        "pageFooterEntry":  null,
+        "autosizeInfo":  {
+                             "objectCount":  0,
+                             "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "a27f094f0eec4d64845801a4c06a32ae"
+                         },
+        "shapeInfo":  {
+                          "hideHeader":  false,
+                          "repeatHeader":  false,
+                          "tableColumnInfoList":  [
+                                                      {
+                                                          "width":  0,
+                                                          "alignment":  1,
+                                                          "label":  null,
+                                                          "propertyName":  "DisplayName",
+                                                          "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "7572aa4155ec4558817a615acf7dd92e"
+                                                      },
+                                                      {
+                                                          "width":  0,
+                                                          "alignment":  1,
+                                                          "label":  null,
+                                                          "propertyName":  "Status",
+                                                          "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "7572aa4155ec4558817a615acf7dd92e"
+                                                      },
+                                                      {
+                                                          "width":  0,
+                                                          "alignment":  1,
+                                                          "label":  null,
+                                                          "propertyName":  "VersionInfo",
+                                                          "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "7572aa4155ec4558817a615acf7dd92e"
+                                                      }
+                                                  ],
+                          "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "e3b7a39c089845d388b2e84c5d38f5dd"
+                      },
+        "groupingEntry":  null,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "033ecb2bc07a4d43b5ef94ed5a35d280"
+    },
+    {
+        "shapeInfo":  null,
+        "groupingEntry":  null,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "9e210fe47d09416682b841769c78b8a3"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Git",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v2.50.1)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Visual Studio Build Tools",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v1.0.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "PostgreSQL 15",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v15.12.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "GitHub CLI",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v2.76.2)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "YT-DLP",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v2025.7.21)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "JQ",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v1.8.1)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Hurl",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v6.1.1)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Micro Editor",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v2.0.11)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Aria2",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v1.37.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Eza",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v0.23.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "fd",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v10.2.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Ripgrep",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v14.1.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Bat",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v0.25.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Duf",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v0.8.1)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "cURL",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v8.15.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "7-Zip",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v25.1.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Google Chrome",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v139.0.7258.66)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Firefox",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v141.0.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Notepad++",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v8.8.3)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "VLC Media Player",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v3.0.21)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Mozilla Thunderbird",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v141.0.0)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "formatEntryInfo":  {
+                                "formatPropertyFieldList":  [
+                                                                {
+                                                                    "propertyValue":  "Python 3",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "Instalado",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                },
+                                                                {
+                                                                    "propertyValue":  "(v3.13.5)",
+                                                                    "alignment":  0,
+                                                                    "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "78b102e894f742aca8c1d6737b6ff86a"
+                                                                }
+                                                            ],
+                                "multiLine":  false,
+                                "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "0e59526e2dd441aa91e7fc952caf4a36"
+                            },
+        "outOfBand":  false,
+        "writeStream":  0,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "27c87ef9bbda4f709f6b4002fa4af63c"
+    },
+    {
+        "groupingEntry":  null,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "4ec4f0187cb04f4cb6973460dfe252df"
+    },
+    {
+        "groupingEntry":  null,
+        "ClassId2e4f51ef21dd47e99d3c952918aff9cd":  "cf522b78d86c486691226b40aa69e95c"
+    },
+    {
+        "OneDriveErradicated":  false,
+        "SoftwareInstalled":  true,
+        "TweaksApplied":  false,
+        "WSLInstalled":  false,
+        "CleanupPerformed":  false,
+        "FatalErrorOccurred":  false,
+        "ManualActions":  [
+
+                          ]
+    }
+]
