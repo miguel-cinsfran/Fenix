@@ -198,6 +198,31 @@ function Invoke-PreFlightChecks {
     } else {
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
     }
+
+    Write-Styled -Message "Verificando módulo de PowerShell para Winget..." -NoNewline
+    if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
+        Write-Styled -Type Consent -Message "El módulo de PowerShell para Winget es requerido para una operación robusta."
+        if ((Read-Host "¿Desea que el script intente instalarlo ahora desde la Galería de PowerShell? (S/N)").Trim().ToUpper() -eq 'S') {
+            Write-Styled -Type Info -Message "Instalando módulo 'Microsoft.WinGet.Client'... Esto puede tardar unos minutos."
+            try {
+                # Instalar el módulo para el usuario actual, aceptando licencias y forzando la instalación.
+                Install-Module -Name Microsoft.WinGet.Client -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
+                Write-Styled -Type Success -Message "Módulo instalado correctamente."
+            } catch {
+                Write-Styled -Type Error -Message "La instalación automática del módulo de Winget falló."
+                Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
+                Write-Styled -Type Warn -Message "El script continuará usando el método anterior, pero puede ser menos fiable."
+                $Global:UseWingetCli = $true # Variable global para indicar que se debe usar el CLI como fallback
+            }
+        } else {
+            Write-Styled -Type Warn -Message "Instalación denegada. El script usará el método anterior para Winget, que puede ser menos fiable."
+            $Global:UseWingetCli = $true
+        }
+    } else {
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+    }
+
     Pause-And-Return -Message "Verificaciones completadas. Presione Enter para continuar..."
 }
 
