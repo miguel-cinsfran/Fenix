@@ -112,78 +112,6 @@ function _Get-PackageStatus {
     }
 }
 
-function _Handle-SoftwareAction {
-    param(
-        [string]$Action,
-        [string]$Manager,
-        [array]$PackagesToAction,
-        [PSCustomObject]$state
-    )
-
-    if ($PackagesToAction.Count -eq 0) {
-        Write-Styled -Type Warn -Message "No hay paquetes que requieran esta acción."
-        Start-Sleep -Seconds 2
-        return
-    }
-
-    $actionVerb = switch ($Action) {
-        "Install" { "instalar" }
-        "Upgrade" { "actualizar" }
-    }
-
-    for ($i = 0; $i -lt $PackagesToAction.Count; $i++) {
-        $item = $PackagesToAction[$i]
-        Write-Host ("[{0,2}] {1,-35} {2}" -f ($i + 1), $item.DisplayName, $item.VersionInfo)
-    }
-    Write-Host
-    Write-Styled -Type Consent -Message "[A] $($actionVerb.ToUpper()) TODOS los paquetes listados"
-    Write-Styled -Type Consent -Message "[0] Volver"
-    Write-Host
-
-    $numericChoices = 1..$PackagesToAction.Count
-    $validChoices = @($numericChoices) + @('A', '0')
-    $choice = Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage "Seleccione un paquete para $($actionVerb), (A) para todos, o (0) para volver"
-
-    if ($choice -eq '0') { return }
-
-    $packagesToProcess = if ($choice -eq 'A') { $PackagesToAction } else { @($PackagesToAction[[int]$choice - 1]) }
-
-    foreach ($item in $packagesToProcess) {
-        if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "Abortando debido a error previo."; break }
-
-        $pkg = $item.Package
-        $command = if ($Action -eq 'Upgrade') { "upgrade" } else { "install" }
-
-        if ($Manager -eq 'Chocolatey') {
-            $chocoArgs = @($command, $pkg.installId, "-y", "--no-progress")
-            if ($pkg.PSObject.Properties.Name -contains 'special_params') { $chocoArgs += "--params='$($pkg.special_params)'" }
-            Execute-InstallJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
-        }
-        elseif ($Manager -eq 'Winget') {
-            # Winget usa 'install' tanto para instalar como para actualizar.
-            $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements")
-            if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
-            Execute-InstallJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
-        }
-    }
-
-    if ($packagesToProcess.Count -gt 0 -and -not $state.FatalErrorOccurred) {
-        Pause-And-Return
-    }
-}
-
-function _Show-InstalledPackages {
-    param([array]$Packages)
-    Write-Styled -Type SubStep -Message "Lista de paquetes del catálogo y su estado:"
-    $installed = $Packages | Where-Object { $_.Status -ne 'No Instalado' }
-    if ($installed.Count -eq 0) {
-        Write-Styled -Type Warn -Message "No hay paquetes instalados de este catálogo."
-    } else {
-        $installed | Format-Table -Property DisplayName, Status, VersionInfo -AutoSize
-    }
-    Pause-And-Return
-}
-
 function Invoke-SoftwareManagerUI {
     param(
         [string]$Manager,
@@ -194,8 +122,7 @@ function Invoke-SoftwareManagerUI {
     try {
         $catalogPackages = (Get-Content -Raw -Path $CatalogFile -Encoding UTF8 | ConvertFrom-Json).items
     } catch {
-        Write-Styled -Type Error -Message "Fallo CRÍTICO al procesar '$CatalogFile'."
-        Write-Styled -Type Log -Message "Error técnico original: $($_.Exception.Message)"
+        Write-Styled -Type Error -Message "Fallo CRÍTICO al procesar '$CatalogFile': $($_.Exception.Message)"
         $state.FatalErrorOccurred = $true
         Pause-And-Return
         return
@@ -204,30 +131,88 @@ function Invoke-SoftwareManagerUI {
     $exitManagerUI = $false
     while (-not $exitManagerUI) {
         Show-Header -Title "FASE 2: Administrador de Paquetes ($Manager)"
-        Write-Styled -Type Step -Message "[1] Instalar paquetes del catálogo"
-        Write-Styled -Type Step -Message "[2] Actualizar paquetes instalados"
-        Write-Styled -Type Step -Message "[3] Listar paquetes instalados del catálogo"
-        Write-Styled -Type Step -Message "[0] Volver al menú anterior"
-        Write-Host
-        $mainChoice = Invoke-MenuPrompt -ValidChoices @('1', '2', '3', '0') -PromptMessage "Seleccione una acción"
-
-        if ($mainChoice -eq '0') { $exitManagerUI = $true; continue }
 
         $packageStatusList = _Get-PackageStatus -Manager $Manager -CatalogPackages $catalogPackages
-        if ($null -eq $packageStatusList) { continue }
+        if ($null -eq $packageStatusList) { return } # Salir si la obtención de estado falla
 
-        switch ($mainChoice) {
-            '1' {
-                $uninstalledPackages = $packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }
-                _Handle-SoftwareAction -Action "Install" -Manager $Manager -PackagesToAction $uninstalledPackages -state $state
+        Write-Styled -Type Title -Message "Estado de paquetes del catálogo:"
+        $packageStatusList | Format-Table -Property DisplayName, Status, VersionInfo -AutoSize
+
+        # --- Menú Dinámico ---
+        $menuOptions = @{}
+        if (($packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }).Count -gt 0) {
+            $menuOptions['I'] = "Instalar TODOS los paquetes pendientes"
+        }
+        if (($packageStatusList | Where-Object { $_.IsUpgradable }).Count -gt 0) {
+            $menuOptions['A'] = "Actualizar TODOS los paquetes desactualizados"
+        }
+        if (($packageStatusList | Where-Object { $_.Status -ne 'No Instalado' }).Count -gt 0) {
+            $menuOptions['D'] = "Desinstalar un paquete específico del catálogo"
+        }
+        $menuOptions['R'] = "Refrescar estado de los paquetes"
+        $menuOptions['0'] = "Volver al Menú Principal"
+
+        Write-Styled -Type Title -Message "Acciones Disponibles:"
+        foreach ($key in $menuOptions.Keys | Sort-Object) {
+            Write-Styled -Type Consent -Message "[$key] $($menuOptions[$key])"
+        }
+
+        $choice = Invoke-MenuPrompt -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" })
+
+        # --- Lógica de Acciones ---
+        switch ($choice) {
+            'I' {
+                $packagesToProcess = $packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }
+                foreach ($item in $packagesToProcess) {
+                    if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "Abortando..."; break }
+                    $pkg = $item.Package
+                    if ($Manager -eq 'Chocolatey') {
+                        $chocoArgs = @("install", $pkg.installId, "-y", "--no-progress")
+                        if ($pkg.special_params) { $chocoArgs += "--params='$($pkg.special_params)'" }
+                        Execute-InstallJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+                    } else { # Winget
+                        $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
+                        if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
+                        Execute-InstallJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+                    }
+                }
             }
-            '2' {
-                $upgradablePackages = $packageStatusList | Where-Object { $_.IsUpgradable }
-                _Handle-SoftwareAction -Action "Upgrade" -Manager $Manager -PackagesToAction $upgradablePackages -state $state
+            'A' {
+                $packagesToProcess = $packageStatusList | Where-Object { $_.IsUpgradable }
+                foreach ($item in $packagesToProcess) {
+                    if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "Abortando..."; break }
+                    $pkg = $item.Package
+                    if ($Manager -eq 'Chocolatey') {
+                        $chocoArgs = @("upgrade", $pkg.installId, "-y", "--no-progress")
+                        Execute-InstallJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+                    } else { # Winget
+                        $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
+                        Execute-InstallJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+                    }
+                }
             }
-            '3' {
-                _Show-InstalledPackages -Packages $packageStatusList
+            'D' {
+                $installedPackages = $packageStatusList | Where-Object { $_.Status -ne 'No Instalado' }
+                for ($i = 0; $i -lt $installedPackages.Count; $i++) {
+                    Write-Styled -Type Step -Message "[$($i+1)] $($installedPackages[$i].DisplayName)"
+                }
+                $uninstallChoice = Invoke-MenuPrompt -ValidChoices (1..$installedPackages.Count)
+                if ($uninstallChoice) {
+                    $item = $installedPackages[[int]$uninstallChoice - 1]
+                    $pkg = $item.Package
+                    if ((Read-Host "¿Está seguro que desea desinstalar $($item.DisplayName)? (S/N)").Trim().ToUpper() -eq 'S') {
+                        if ($Manager -eq 'Chocolatey') {
+                            $chocoArgs = @("uninstall", $pkg.installId, "-y")
+                            Execute-InstallJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
+                        } else { # Winget
+                            $wingetArgs = @("uninstall", "--id", $pkg.installId, "--silent")
+                            Execute-InstallJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
+                        }
+                    }
+                }
             }
+            'R' { continue }
+            '0' { $exitManagerUI = $true }
         }
     }
 }

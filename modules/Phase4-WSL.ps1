@@ -38,7 +38,6 @@ function Invoke-Phase4_WSL {
             Write-Styled -Type Warn -Message "WSL no está instalado o no es funcional."
             Write-Styled -Type Step -Message "Verificando prerrequisitos de Windows (VirtualMachinePlatform y Subsystem-Linux)..."
 
-            # Lógica de verificación y habilitación de características
             $featuresToEnable = @()
             $vmPlatform = Get-WindowsOptionalFeature -Online -FeatureName "VirtualMachinePlatform"
             if ($vmPlatform.State -ne 'Enabled') { $featuresToEnable += "VirtualMachinePlatform" }
@@ -46,7 +45,7 @@ function Invoke-Phase4_WSL {
             if ($wslSubsystem.State -ne 'Enabled') { $featuresToEnable += "Microsoft-Windows-Subsystem-Linux" }
 
             if ($featuresToEnable.Count -gt 0) {
-                # Caso A: Las características no están habilitadas. Hay que habilitarlas y forzar el reinicio.
+                # Caso A: Las características no están habilitadas.
                 Write-Styled -Type Warn -Message "Las siguientes características de Windows son necesarias y no están habilitadas:"
                 $featuresToEnable | ForEach-Object { Write-Styled -Type Info -Message "  - $_" }
                 if ((Read-Host "¿Autoriza al script a habilitar estas características? (S/N)").Trim().ToUpper() -eq 'S') {
@@ -56,15 +55,17 @@ function Invoke-Phase4_WSL {
                 } else {
                     Write-Styled -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos."
                 }
-                Pause-And-Return; return $state # Salir de la fase para forzar el reinicio
+                Pause-And-Return
+                return $state
             }
 
             # Caso B: Las características SÍ están habilitadas, pero 'wsl --status' falló.
-            # Esto significa que la instalación principal de WSL debe ejecutarse.
             Write-Styled -Type Success -Message "Todos los prerrequisitos de Windows ya están habilitados."
             Write-Styled -Type Step -Message "Procediendo con la instalación de WSL y la distribución de Ubuntu por defecto..."
             $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install" -FailureStrings "Error" -Activity "Instalando WSL y Ubuntu"
-            if (-not $installResult.Success) { throw "La instalación de WSL falló. Salida: $($installResult.Output)" }
+            if (-not $installResult.Success) {
+                throw "La instalación de WSL falló. Salida: $($installResult.Output)"
+            }
 
             Write-Styled -Type Success -Message "La instalación de WSL parece haber sido exitosa."
             $state.ManualActions.Add("WSL y Ubuntu han sido instalados. Se requiere un reinicio para completar la configuración.")
