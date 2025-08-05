@@ -219,31 +219,47 @@ try {
         }
     }
 } catch [System.Management.Automation.PipelineStoppedException] {
-    # Este bloque ahora es redundante debido al manejo en finally, pero se mantiene como salvaguarda.
+    # Silenciar el error de Ctrl+C, ya que el bloque finally lo manejará.
 } catch {
-    $state.FatalErrorOccurred = $true
+    # En caso de un error verdaderamente inesperado, marcar el estado como fallido si es posible.
+    if ($state -is [PSCustomObject]) {
+        $state.FatalErrorOccurred = $true
+    }
     Write-Styled -Type Error -Message "El script ha encontrado un error fatal inesperado y no puede continuar."
     Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
     Read-Host "Presione Enter para salir."
 } finally {
-    if ($state) {
-        $state | ConvertTo-Json -Depth 5 | Out-File -FilePath $stateFile -Encoding utf8
-    }
-    
-    if (-not $exitMainMenu -and -not $state.FatalErrorOccurred) {
-        Write-Host "`nInterrupción del usuario (Ctrl+C) detectada. Procediendo a la finalización ordenada..." -F $Theme.Warn
+    # --- Bloque de finalización a prueba de fallos ---
+    # Asegurarse de que el estado exista y sea un objeto antes de intentar usarlo.
+    if ($state -is [PSCustomObject]) {
+        if (-not $exitMainMenu -and -not $state.FatalErrorOccurred) {
+            Write-Host "`nInterrupción del usuario (Ctrl+C) detectada. Procediendo a la finalización ordenada..." -F $Theme.Warn
+        }
+
+        # Guardar el estado final solo si el objeto es válido.
+        try {
+            $state | ConvertTo-Json -Depth 5 | Out-File -FilePath $stateFile -Encoding utf8
+        } catch {
+            Write-Styled -Type Error -Message "No se pudo guardar el archivo de estado final: $($_.Exception.Message)"
+        }
+
+        Show-Header -Title "PROCESO FINALIZADO" -NoClear
+        if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "`nLa ejecución fue abortada o finalizó con errores. Revise el log." }
+
+        # Comprobar la existencia y el tipo de ManualActions antes de acceder a Count
+        if ($state.PSObject.Properties.Name -contains 'ManualActions' -and $state.ManualActions -is [System.Collections.Generic.List[string]] -and $state.ManualActions.Count -gt 0) {
+            Write-Styled -Type Consent -Message "[ACCIONES MANUALES REQUERIDAS]"; Write-Host ""
+            ($state.ManualActions | Get-Unique) | ForEach-Object { Write-Styled -Type Step -Message $_ }
+            Write-Host ""; Write-Host "---" -F $Theme.Subtle
+        } elseif (-not $state.FatalErrorOccurred) {
+            Write-Styled -Type Success -Message "No hay acciones manuales requeridas."
+        }
+    } else {
+        # Caso extremo donde $state no es un objeto válido.
+        Show-Header -Title "PROCESO FINALIZADO CON ERRORES GRAVES" -NoClear
+        Write-Styled -Type Error -Message "El estado interno del script se corrompió y no se pudo finalizar limpiamente."
     }
 
-    Show-Header -Title "PROCESO FINALIZADO"
-    if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "`nLa ejecución fue abortada o finalizó con errores. Revise el log." }
-    
-    if ($state.ManualActions.Count -gt 0) {
-        Write-Styled -Type Consent -Message "[ACCIONES MANUALES REQUERIDAS]"; Write-Host ""
-        ($state.ManualActions | Get-Unique) | ForEach-Object { Write-Styled -Type Step -Message $_ }
-        Write-Host ""; Write-Host "---" -F $Theme.Subtle
-    } elseif (-not $state.FatalErrorOccurred) {
-        Write-Styled -Type Success -Message "No hay acciones manuales requeridas."
-    }
     Write-Styled -Type Info -Message "`nEl log completo de la sesión se ha guardado en: $logFile"; Write-Host
     Stop-Transcript
 }

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 5 para la limpieza y optimización del sistema.
 .DESCRIPTION
@@ -89,12 +89,20 @@ function _Invoke-AnalyzeProcesses {
     }
 
     Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de CPU:"
-    $processList | Sort-Object -Property CPUTime -Descending | Select-Object -First $Task.details.count |
-        Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}} -AutoSize
+    $topCpu = $processList | Sort-Object -Property CPUTime -Descending | Select-Object -First $Task.details.count
+    if (($topCpu | Where-Object { $_.CPUTime -gt 0 }).Count -eq 0) {
+        Write-Styled -Type Info -Message "No se encontraron procesos con un consumo de CPU significativo."
+    } else {
+        $topCpu | Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}} -AutoSize
+    }
 
     Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de Memoria (MB):"
-    $processList | Sort-Object -Property Memory -Descending | Select-Object -First $Task.details.count |
-        Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}} -AutoSize
+    $topMem = $processList | Sort-Object -Property Memory -Descending | Select-Object -First $Task.details.count
+    if ($topMem.Count -eq 0) {
+        Write-Styled -Type Info -Message "No se encontraron procesos para analizar."
+    } else {
+        $topMem | Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}} -AutoSize
+    }
 
     Pause-And-Return
 }

@@ -9,38 +9,29 @@
     Autor: miguel-cinsfran
 #>
 
-# Mantener la función original de ejecución de trabajos, como se prefiera.
 function Execute-InstallJob {
     param(
-        [string]$PackageName, 
-        [scriptblock]$InstallBlock, 
+        [string]$PackageName,
+        [string]$Executable,
+        [string]$ArgumentList,
         [PSCustomObject]$state,
-        [string]$Manager
+        [string[]]$FailureStrings
     )
 
-    $result = Invoke-JobWithTimeout -ScriptBlock $InstallBlock -Activity "Instalando $PackageName" -IdleTimeoutSeconds 300
+    # Deshabilitar el timeout de inactividad para instalaciones de software,
+    # ya que pueden tener largos periodos de descarga sin actividad en la consola.
+    $result = Invoke-NativeCommand -Executable $Executable -ArgumentList $ArgumentList -FailureStrings $FailureStrings -Activity "Instalando $PackageName" -IdleTimeoutEnabled $false
 
     if (-not $result.Success) {
         $state.FatalErrorOccurred = $true
-        Write-Styled -Type Error -Message "Falló la instalación de $PackageName. Razón: $($result.Error)"
-        # Opcional: Mostrar la salida completa en caso de error para depuración.
+        Write-Styled -Type Error -Message "Falló la instalación de $PackageName."
         if ($result.Output) {
             Write-Styled -Type Log -Message "--- INICIO DE SALIDA DEL PROCESO ---"
             $result.Output | ForEach-Object { Write-Styled -Type Log -Message $_ }
             Write-Styled -Type Log -Message "--- FIN DE SALIDA DEL PROCESO ---"
         }
     } else {
-        # La lógica original de string-matching puede actuar como una segunda capa de verificación.
-        $jobOutput = $result.Output
-        if ($Manager -eq 'Chocolatey' -and ($jobOutput -match "not found|was not found")) {
-            $state.FatalErrorOccurred = $true
-            Write-Styled -Type Error -Message "Falló la instalación de ${PackageName}: Chocolatey no pudo encontrar el paquete."
-        } elseif ($Manager -eq 'Winget' -and ($jobOutput -match "No se encontró ningún paquete|No package found")) {
-            $state.FatalErrorOccurred = $true
-            Write-Styled -Type Error -Message "Falló la instalación de ${PackageName}: Winget no pudo encontrar el paquete."
-        } else {
-            Write-Styled -Type Success -Message "Instalación de $PackageName finalizada."
-        }
+        Write-Styled -Type Success -Message "Instalación de $PackageName finalizada."
     }
 }
 
@@ -50,38 +41,46 @@ function _Get-PackageStatus {
         [array]$CatalogPackages
     )
 
-    Write-Styled -Type Info -Message "Obteniendo estado de los paquetes... (Esto puede tardar hasta 2 minutos por comando)"
-
+    Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para $Manager..."
     $installedPackages = @{}
     $outdatedPackages = @{}
 
     if ($Manager -eq 'Chocolatey') {
-        $listResult = Invoke-JobWithTimeout -ScriptBlock { choco list --limit-output --local-only } -Activity "Consultando paquetes de Chocolatey"
+        $listResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "list --limit-output --local-only" -Activity "Consultando paquetes de Chocolatey"
         if ($listResult.Success) {
-            $listResult.Output | ForEach-Object { $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id.Trim()] = $version.Trim() } }
-        } else { Write-Styled -Type Error -Message "Timeout: No se pudo obtener la lista de paquetes instalados."; return $null }
+            $listResult.Output -split "`n" | ForEach-Object { $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id.Trim()] = $version.Trim() } }
+        } else { Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados."; return $null }
 
-        $outdatedResult = Invoke-JobWithTimeout -ScriptBlock { choco outdated --limit-output } -Activity "Buscando actualizaciones de Chocolatey"
+        $outdatedResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "outdated --limit-output" -Activity "Buscando actualizaciones de Chocolatey"
         if ($outdatedResult.Success) {
-            $outdatedResult.Output | ForEach-Object { $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id.Trim()] = @{ Current = $current.Trim(); Available = $available.Trim() } } }
-        } else { Write-Styled -Type Error -Message "Timeout: No se pudo obtener la lista de paquetes desactualizados."; return $null }
+            $outdatedResult.Output -split "`n" | ForEach-Object { $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id.Trim()] = @{ Current = $current.Trim(); Available = $available.Trim() } } }
+        } # No es un error fatal si esto falla, podría no haber ninguno desactualizado.
 
     } else { # Winget
-        # La lógica de Winget es más compleja y se mantiene directa por ahora.
-        $installedOutput = winget list --disable-interactivity --accept-source-agreements
-        $upgradeOutput = winget upgrade --disable-interactivity --accept-source-agreements --include-unknown
+        $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --disable-interactivity --accept-source-agreements" -Activity "Consultando paquetes de Winget"
+        if (-not $listResult.Success) { Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados."; return $null }
+
+        $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --disable-interactivity --accept-source-agreements --include-unknown" -Activity "Buscando actualizaciones de Winget"
+
+        $installedLines = $listResult.Output -split "`n"
+        $upgradeLines = if ($upgradeResult.Success) { $upgradeResult.Output -split "`n" } else { @() }
 
         foreach ($pkg in $CatalogPackages) {
-            $regexId = [regex]::Escape($pkg.installId)
-            foreach ($line in $installedOutput) {
-                if ($line -match "^(.+?)\s+($regexId)\s+([^\s]+)") {
-                    $installedPackages[$pkg.installId] = $matches[3]
+            $checkId = if ($pkg.checkName) { $pkg.checkName } else { $pkg.installId }
+            $regexId = [regex]::Escape($checkId)
+
+            foreach ($line in $installedLines) {
+                if ($line -match "^(.+?)\s+($regexId)\s+") {
+                    # Winget usa múltiples espacios, es mejor un split para la versión
+                    $version = ($line -split '\s+')[-2]
+                    $installedPackages[$pkg.installId] = $version
                     break
                 }
             }
-            foreach ($line in $upgradeOutput) {
-                if ($line -match "^(.+?)\s+($regexId)\s+([^\s]+)\s+([^\s]+)") {
-                    $outdatedPackages[$pkg.installId] = @{ Current = $matches[3]; Available = $matches[4] }
+            foreach ($line in $upgradeLines) {
+                if ($line -match "^(.+?)\s+($regexId)\s+") {
+                    $parts = $line -split '\s+'
+                    $outdatedPackages[$pkg.installId] = @{ Current = $parts[-3]; Available = $parts[-2] }
                     break
                 }
             }
@@ -158,19 +157,31 @@ function _Handle-SoftwareAction {
         if ($Manager -eq 'Chocolatey') {
             $chocoArgs = @($command, $pkg.installId, "-y", "--no-progress")
             if ($pkg.PSObject.Properties.Name -contains 'special_params') { $chocoArgs += "--params='$($pkg.special_params)'" }
-            Execute-InstallJob -PackageName $item.DisplayName -InstallBlock { & choco $using:chocoArgs } -state $state -Manager 'Chocolatey'
+            Execute-InstallJob -PackageName $item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -state $state -FailureStrings "not found", "was not found"
         }
         elseif ($Manager -eq 'Winget') {
             # Winget usa 'install' tanto para instalar como para actualizar.
             $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements")
             if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
-            Execute-InstallJob -PackageName $item.DisplayName -InstallBlock { & winget $using:wingetArgs } -state $state -Manager 'Winget'
+            Execute-InstallJob -PackageName $item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -state $state -FailureStrings "No package found"
         }
     }
 
     if ($packagesToProcess.Count -gt 0 -and -not $state.FatalErrorOccurred) {
         Pause-And-Return
     }
+}
+
+function _Show-InstalledPackages {
+    param([array]$Packages)
+    Write-Styled -Type SubStep -Message "Lista de paquetes del catálogo y su estado:"
+    $installed = $Packages | Where-Object { $_.Status -ne 'No Instalado' }
+    if ($installed.Count -eq 0) {
+        Write-Styled -Type Warn -Message "No hay paquetes instalados de este catálogo."
+    } else {
+        $installed | Format-Table -Property DisplayName, Status, VersionInfo -AutoSize
+    }
+    Pause-And-Return
 }
 
 function Invoke-SoftwareManagerUI {
@@ -195,14 +206,15 @@ function Invoke-SoftwareManagerUI {
         Show-Header -Title "FASE 2: Administrador de Paquetes ($Manager)"
         Write-Styled -Type Step -Message "[1] Instalar paquetes del catálogo"
         Write-Styled -Type Step -Message "[2] Actualizar paquetes instalados"
+        Write-Styled -Type Step -Message "[3] Listar paquetes instalados del catálogo"
         Write-Styled -Type Step -Message "[0] Volver al menú anterior"
         Write-Host
-        $mainChoice = Invoke-MenuPrompt -ValidChoices @('1', '2', '0') -PromptMessage "Seleccione una acción"
+        $mainChoice = Invoke-MenuPrompt -ValidChoices @('1', '2', '3', '0') -PromptMessage "Seleccione una acción"
 
         if ($mainChoice -eq '0') { $exitManagerUI = $true; continue }
 
         $packageStatusList = _Get-PackageStatus -Manager $Manager -CatalogPackages $catalogPackages
-        if ($null -eq $packageStatusList) { continue } # Si la obtención de estado falló, volver al menú
+        if ($null -eq $packageStatusList) { continue }
 
         switch ($mainChoice) {
             '1' {
@@ -212,6 +224,9 @@ function Invoke-SoftwareManagerUI {
             '2' {
                 $upgradablePackages = $packageStatusList | Where-Object { $_.IsUpgradable }
                 _Handle-SoftwareAction -Action "Upgrade" -Manager $Manager -PackagesToAction $upgradablePackages -state $state
+            }
+            '3' {
+                _Show-InstalledPackages -Packages $packageStatusList
             }
         }
     }
