@@ -18,39 +18,29 @@ function Execute-InstallJob {
         [string]$Manager
     )
 
-    $job = Start-Job -ScriptBlock $InstallBlock
-    Write-Styled -Type Info -Message "Iniciando instalación de $PackageName..."
-    while ($job.State -eq 'Running') {
-        Write-Progress -Activity "Instalando $PackageName" -Status "Ejecutando en segundo plano..." -PercentComplete -1
-        Start-Sleep -Milliseconds 500
-    }
-    Write-Progress -Activity "Instalando $PackageName" -Completed
-    
-    try {
-        $jobOutput = Receive-Job $job
-        $jobFailed = $false
-        $failureReason = ""
+    $result = Invoke-JobWithTimeout -ScriptBlock $InstallBlock -Activity "Instalando $PackageName" -IdleTimeoutSeconds 300
 
-        if ($job.State -ne 'Completed') {
-            $jobFailed = $true
-            $failureReason = "El estado del trabajo fue '$($job.State)'."
-        } else {
-            if ($Manager -eq 'Chocolatey') {
-                if ($jobOutput -match "not found|was not found") { $jobFailed = $true; $failureReason = "Chocolatey no pudo encontrar el paquete." }
-            }
-            elseif ($Manager -eq 'Winget') {
-                if ($jobOutput -match "No se encontró ningún paquete|No package found") { $jobFailed = $true; $failureReason = "Winget no pudo encontrar el paquete." }
-            }
+    if (-not $result.Success) {
+        $state.FatalErrorOccurred = $true
+        Write-Styled -Type Error -Message "Falló la instalación de $PackageName. Razón: $($result.Error)"
+        # Opcional: Mostrar la salida completa en caso de error para depuración.
+        if ($result.Output) {
+            Write-Styled -Type Log -Message "--- INICIO DE SALIDA DEL PROCESO ---"
+            $result.Output | ForEach-Object { Write-Styled -Type Log -Message $_ }
+            Write-Styled -Type Log -Message "--- FIN DE SALIDA DEL PROCESO ---"
         }
-
-        if ($jobFailed) {
+    } else {
+        # La lógica original de string-matching puede actuar como una segunda capa de verificación.
+        $jobOutput = $result.Output
+        if ($Manager -eq 'Chocolatey' -and ($jobOutput -match "not found|was not found")) {
             $state.FatalErrorOccurred = $true
-            Write-Styled -Type Error -Message "Falló la instalación de $PackageName. Razón: $failureReason"
+            Write-Styled -Type Error -Message "Falló la instalación de $PackageName: Chocolatey no pudo encontrar el paquete."
+        } elseif ($Manager -eq 'Winget' -and ($jobOutput -match "No se encontró ningún paquete|No package found")) {
+            $state.FatalErrorOccurred = $true
+            Write-Styled -Type Error -Message "Falló la instalación de $PackageName: Winget no pudo encontrar el paquete."
         } else {
             Write-Styled -Type Success -Message "Instalación de $PackageName finalizada."
         }
-    } finally {
-        Remove-Job $job -Force
     }
 }
 

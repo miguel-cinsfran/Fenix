@@ -84,17 +84,26 @@ function Invoke-MenuPrompt {
 function Invoke-JobWithTimeout {
     param(
         [scriptblock]$ScriptBlock,
-        [int]$TimeoutSeconds = 120,
+        [int]$IdleTimeoutSeconds = 120, # Timeout si no hay actividad
         [string]$Activity = "Ejecutando operación en segundo plano..."
     )
 
     $job = Start-Job -ScriptBlock $ScriptBlock
-    $timer = [System.Diagnostics.Stopwatch]::StartNew()
-    $timeout = New-TimeSpan -Seconds $TimeoutSeconds
+    $idleTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $idleTimeout = New-TimeSpan -Seconds $IdleTimeoutSeconds
+    $lastOutputCount = 0
 
-    while ($job.State -eq 'Running' -and $timer.Elapsed -lt $timeout) {
-        Write-Progress -Activity $Activity -Status "Tiempo restante: $(($timeout - $timer.Elapsed).ToString('mm\:ss'))" -PercentComplete (($timer.Elapsed.TotalSeconds / $TimeoutSeconds) * 100)
-        Start-Sleep -Milliseconds 250
+    while ($job.State -eq 'Running' -and $idleTimer.Elapsed -lt $idleTimeout) {
+        $status = "Tiempo de inactividad restante: $(($idleTimeout - $idleTimer.Elapsed).ToString('mm\:ss'))"
+        Write-Progress -Activity $Activity -Status $status
+
+        # Comprobar si hay nueva salida
+        if ($job.ChildJobs[0].Output.Count -gt $lastOutputCount) {
+            $idleTimer.Restart() # Reiniciar el temporizador de inactividad
+            $lastOutputCount = $job.ChildJobs[0].Output.Count
+        }
+
+        Start-Sleep -Milliseconds 500
     }
     Write-Progress -Activity $Activity -Completed
 
@@ -105,8 +114,8 @@ function Invoke-JobWithTimeout {
     }
 
     if ($job.State -eq 'Running') {
-        $result.Error = "La operación excedió el tiempo de espera de $TimeoutSeconds segundos y fue terminada."
-        Stop-Job $job -Force
+        $result.Error = "La operación no mostró actividad por más de $IdleTimeoutSeconds segundos y fue terminada."
+        Stop-Job $job
     }
     elseif ($job.State -eq 'Failed') {
         $result.Error = ($job.Error | Select-Object -First 1).Exception.Message

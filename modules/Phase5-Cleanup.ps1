@@ -61,10 +61,18 @@ function _Invoke-FindLargeFiles {
 
 function _Invoke-AnalyzeProcesses {
     param($Task)
-    Write-Styled -Type SubStep -Message "Procesos con mayor consumo de CPU:"
-    Get-Process | Sort-Object -Property CPU -Descending | Select-Object -First $Task.details.count | Format-Table -AutoSize
-    Write-Styled -Type SubStep -Message "Procesos con mayor consumo de Memoria (MB):"
-    Get-Process | Sort-Object -Property WorkingSet -Descending | Select-Object -First $Task.details.count | Format-Table -AutoSize
+    # Get-Process puede tardar un poco, es mejor notificar al usuario.
+    Write-Styled -Type Info -Message "Analizando procesos del sistema..."
+    $processes = Get-Process
+
+    Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de CPU:"
+    # La propiedad CPU es dinámica, se calcula y puede ser 0 en la primera llamada.
+    # Es más fiable ordenar por TotalProcessorTime para encontrar procesos históricamente intensivos.
+    $processes | Sort-Object -Property TotalProcessorTime -Descending | Select-Object -First $Task.details.count | Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPU}}, @{Name="Memoria (MB)"; Expression={($_.WorkingSet / 1MB).ToString('F2')}} -AutoSize
+
+    Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de Memoria (MB):"
+    $processes | Sort-Object -Property WorkingSet -Descending | Select-Object -First $Task.details.count | Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPU}}, @{Name="Memoria (MB)"; Expression={($_.WorkingSet / 1MB).ToString('F2')}} -AutoSize
+
     Pause-And-Return
 }
 
