@@ -166,7 +166,7 @@ try {
 
         $numericChoices = 1..$mainMenuOptions.Count
         $validChoices = @($numericChoices) + @('R', 'Q')
-        $choice = Invoke-MenuPrompt -ValidChoices $validChoices
+        $choice = Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage "Seleccione una opción"
 
         switch ($choice) {
             'R' { continue }

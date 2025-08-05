@@ -1,11 +1,11 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 2 para la instalación de software desde manifiestos.
 .DESCRIPTION
     Contiene la lógica para cargar catálogos de Chocolatey y Winget, y presenta
     un submenú para permitir la instalación granular o completa de los paquetes.
 .NOTES
-    Versión: 1.0
+    Versión: 2.0
     Autor: miguel-cinsfran
 #>
 
@@ -62,7 +62,125 @@ function Execute-InstallJob {
     }
 }
 
-# Nueva función para manejar la UI de un gestor de paquetes específico
+function _Get-PackageStatus {
+    param(
+        [string]$Manager,
+        [array]$CatalogPackages
+    )
+
+    Write-Styled -Type Info -Message "Obteniendo estado de los paquetes... (Esto puede tardar unos segundos)"
+
+    $installedPackages = @{}
+    if ($Manager -eq 'Chocolatey') {
+        $jobResult = Invoke-JobWithTimeout -ScriptBlock { choco list --limit-output --local-only } -Activity "Consultando paquetes de Chocolatey"
+        if ($jobResult.Success) {
+            $jobResult.Output | ForEach-Object { $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id] = $version } }
+        }
+    } else {
+        # Lógica para Winget...
+    }
+
+    $outdatedPackages = @{}
+    if ($Manager -eq 'Chocolatey') {
+        $jobResult = Invoke-JobWithTimeout -ScriptBlock { choco outdated --limit-output } -Activity "Buscando actualizaciones de Chocolatey"
+        if ($jobResult.Success) {
+            $jobResult.Output | ForEach-Object { $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id] = @{ Current = $current; Available = $available } } }
+        }
+    } else {
+        # Lógica para Winget...
+    }
+
+    $packageStatusList = foreach ($pkg in $CatalogPackages) {
+        $status = "No Instalado"
+        $versionInfo = ""
+        $isUpgradable = $false
+
+        $installId = $pkg.installId
+        if ($outdatedPackages.ContainsKey($installId)) {
+            $status = "Actualización Disponible"
+            $versionInfo = "(v$($outdatedPackages[$installId].Current) -> v$($outdatedPackages[$installId].Available))"
+            $isUpgradable = $true
+        } elseif ($installedPackages.ContainsKey($installId)) {
+            $status = "Instalado"
+            $versionInfo = "(v$($installedPackages[$installId]))"
+        }
+
+        [PSCustomObject]@{
+            DisplayName  = if ($pkg.name) { $pkg.name } else { $pkg.installId }
+            Package      = $pkg
+            Status       = $status
+            VersionInfo  = $versionInfo
+            IsUpgradable = $isUpgradable
+        }
+    }
+    return $packageStatusList
+}
+
+
+function _Handle-SoftwareAction {
+    param(
+        [string]$Action,
+        [string]$Manager,
+        [array]$PackagesToAction,
+        [PSCustomObject]$state
+    )
+
+    if ($PackagesToAction.Count -eq 0) {
+        Write-Styled -Type Warn -Message "No hay paquetes que requieran esta acción."
+        Start-Sleep -Seconds 2
+        return
+    }
+
+    $actionVerb = switch ($Action) {
+        "Install" { "instalar" }
+        "Upgrade" { "actualizar" }
+    }
+
+    for ($i = 0; $i -lt $PackagesToAction.Count; $i++) {
+        $item = $PackagesToAction[$i]
+        Write-Host ("[{0,2}] {1,-35}" -f ($i + 1), $item.DisplayName)
+    }
+    Write-Host
+    Write-Styled -Type Consent -Message "[A] $($actionVerb.ToUpper()) TODOS los paquetes listados"
+    Write-Styled -Type Consent -Message "[0] Volver"
+    Write-Host
+
+    $numericChoices = 1..$PackagesToAction.Count
+    $validChoices = @($numericChoices) + @('A', '0')
+    $choice = Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage "Seleccione un paquete para $($actionVerb), (A) para todos, o (0) para volver"
+
+    if ($choice -eq '0') { return }
+
+    $packagesToProcess = @()
+    if ($choice -eq 'A') {
+        $packagesToProcess = $PackagesToAction
+    } else {
+        $packagesToProcess = @($PackagesToAction[[int]$choice - 1])
+    }
+
+    foreach ($item in $packagesToProcess) {
+        if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "Abortando debido a error previo."; break }
+
+        $pkg = $item.Package
+        $command = if ($Action -eq 'Upgrade') { "upgrade" } else { "install" }
+
+        if ($Manager -eq 'Chocolatey') {
+            $chocoArgs = @($command, $pkg.installId, "-y", "--no-progress")
+            if ($pkg.PSObject.Properties.Name -contains 'special_params') { $chocoArgs += "--params='$($pkg.special_params)'" }
+            Execute-InstallJob -PackageName $item.DisplayName -InstallBlock { & choco $using:chocoArgs } -state $state -Manager 'Chocolatey'
+        }
+        elseif ($Manager -eq 'Winget') {
+            $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements")
+            if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
+            Execute-InstallJob -PackageName $item.DisplayName -InstallBlock { & winget $using:wingetArgs } -state $state -Manager 'Winget'
+        }
+    }
+
+    if ($packagesToProcess.Count -gt 0 -and -not $state.FatalErrorOccurred) {
+        Pause-And-Return
+    }
+}
+
 function Invoke-SoftwareManagerUI {
     param(
         [string]$Manager,
@@ -71,7 +189,7 @@ function Invoke-SoftwareManagerUI {
     )
 
     try {
-        $packages = (Get-Content -Raw -Path $CatalogFile -Encoding UTF8 | ConvertFrom-Json).items
+        $catalogPackages = (Get-Content -Raw -Path $CatalogFile -Encoding UTF8 | ConvertFrom-Json).items
     } catch {
         Write-Styled -Type Error -Message "Fallo CRÍTICO al procesar '$CatalogFile'."
         Write-Styled -Type Log -Message "Error técnico original: $($_.Exception.Message)"
@@ -83,133 +201,29 @@ function Invoke-SoftwareManagerUI {
     $exitManagerUI = $false
     while (-not $exitManagerUI) {
         Show-Header -Title "FASE 2: Administrador de Paquetes ($Manager)"
-        Write-Styled -Type Info -Message "Obteniendo estado de los paquetes... (Esto puede tardar unos segundos)"
-
-        # Recopilar información de estado para cada paquete
-        $packageStatusList = foreach ($pkg in $packages) {
-            $status = "No Instalado"
-            $versionInfo = ""
-            $isUpgradable = $false
-
-            if ($Manager -eq 'Chocolatey') {
-                $installed = choco list --limit-output --exact $pkg.installId
-                if ($installed) {
-                    $version = ($installed -split '\|')[1].Trim()
-                    $status = "Instalado"
-                    $versionInfo = "(v$version)"
-                    $outdated = choco outdated --limit-output --exact $pkg.installId
-                    if ($outdated) {
-                        $availableVersion = ($outdated -split '\|')[2].Trim()
-                        $status = "Actualización Disponible"
-                        $versionInfo = "(v$version -> v$availableVersion)"
-                        $isUpgradable = $true
-                    }
-                }
-            }
-            elseif ($Manager -eq 'Winget') {
-                $wingetListArgs = @("list", "--disable-interactivity", "--accept-source-agreements")
-                if ($pkg.checkName) { $wingetListArgs += "--name", $pkg.checkName } else { $wingetListArgs += "--id", $pkg.installId }
-                if ($pkg.source) { $wingetListArgs += "--source", $pkg.source }
-                $checkResult = & winget $wingetListArgs
-
-                $installedVersion = $null
-                foreach ($line in $checkResult) { if ($line -match "^(.+?)\s+($([regex]::Escape($pkg.installId)))\s+([^\s]+)") { $installedVersion = $matches[3]; break } }
-
-                if ($installedVersion) {
-                    $status = "Instalado"
-                    $versionInfo = "(v$installedVersion)"
-                    # Winget upgrade --dry-run no es fiable, así que lo simulamos
-                    $upgradeArgs = @("upgrade", "--id", $pkg.installId, "--accept-package-agreements", "--include-unknown")
-                    if ($pkg.source) { $upgradeArgs += "--source", $pkg.source }
-                    $upgradeResult = & winget $upgradeArgs
-                    if ($upgradeResult -match "Se encontró un paquete que coincide con la entrada") {
-                        $status = "Actualización Disponible"
-                        $isUpgradable = $true
-                    }
-                }
-            }
-
-            [PSCustomObject]@{
-                DisplayName  = if ($pkg.name) { $pkg.name } else { $pkg.installId }
-                Package      = $pkg
-                Status       = $status
-                VersionInfo  = $versionInfo
-                IsUpgradable = $isUpgradable
-            }
-        }
-
-        # Mostrar la lista de paquetes
-        for ($i = 0; $i -lt $packageStatusList.Count; $i++) {
-            $item = $packageStatusList[$i]
-            $color = @{ "Instalado" = "Green"; "No Instalado" = "DarkGray"; "Actualización Disponible" = "Yellow" }[$item.Status]
-            Write-Host ("[{0,2}] {1,-35} " -f ($i + 1), $item.DisplayName) -NoNewline
-            Write-Host ("[{0}]" -f $item.Status.ToUpper()) -F $color -NoNewline
-            Write-Host " $($item.VersionInfo)"
-        }
-
-        # Menú de acciones
+        Write-Styled -Type Step -Message "[1] Instalar paquetes del catálogo"
+        Write-Styled -Type Step -Message "[2] Actualizar paquetes instalados"
+        Write-Styled -Type Step -Message "[0] Volver al menú anterior"
         Write-Host
-        Write-Styled -Type Consent -Message "[A] Instalar/Actualizar TODO lo pendiente"
-        Write-Styled -Type Consent -Message "[0] Volver al menú anterior"
-        Write-Host
+        $mainChoice = Invoke-MenuPrompt -ValidChoices @('1', '2', '0') -PromptMessage "Seleccione una acción"
 
-        $numericChoices = 1..$packageStatusList.Count
-        $validChoices = @($numericChoices) + @('A', '0')
-        $choice = Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage "Seleccione un paquete para instalar/actualizar, (A) para todos, o (0) para volver"
+        $packageStatusList = _Get-PackageStatus -Manager $Manager -CatalogPackages $catalogPackages
 
-        if ($choice -eq '0') {
-            $exitManagerUI = $true
-            continue
-        }
-
-        $packagesToProcess = @()
-        if ($choice -eq 'A') {
-            $packagesToProcess = $packageStatusList | Where-Object { $_.Status -ne 'Instalado' }
-            if ($packagesToProcess.Count -eq 0) {
-                Write-Styled -Type Warn -Message "No hay paquetes pendientes para instalar o actualizar."
-                Start-Sleep -Seconds 2
-                continue
+        switch ($mainChoice) {
+            '1' {
+                $uninstalledPackages = $packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }
+                _Handle-SoftwareAction -Action "Install" -Manager $Manager -PackagesToAction $uninstalledPackages -state $state
             }
-        } else {
-            $selectedItem = $packageStatusList[[int]$choice - 1]
-            if ($selectedItem.Status -eq 'Instalado') {
-                Write-Styled -Type Warn -Message "El paquete seleccionado ya está instalado y actualizado."
-                Start-Sleep -Seconds 2
-                continue
+            '2' {
+                $upgradablePackages = $packageStatusList | Where-Object { $_.IsUpgradable }
+                _Handle-SoftwareAction -Action "Upgrade" -Manager $Manager -PackagesToAction $upgradablePackages -state $state
             }
-            $packagesToProcess = @($selectedItem)
-        }
-
-        foreach ($item in $packagesToProcess) {
-            if ($state.FatalErrorOccurred) { Write-Styled -Type Error -Message "Abortando debido a error previo."; break }
-
-            $pkg = $item.Package
-            $command = if ($item.IsUpgradable) { "upgrade" } else { "install" }
-
-            if ($Manager -eq 'Chocolatey') {
-                $chocoArgs = @($command, $pkg.installId, "-y", "--no-progress")
-                if ($pkg.PSObject.Properties.Name -contains 'special_params') { $chocoArgs += "--params='$($pkg.special_params)'" }
-                Execute-InstallJob -PackageName $item.DisplayName -InstallBlock { & choco $using:chocoArgs } -state $state -Manager 'Chocolatey'
+            '0' {
+                $exitManagerUI = $true
             }
-            elseif ($Manager -eq 'Winget') {
-                # Winget usa 'install' tanto para instalar como para actualizar.
-                $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements")
-                if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
-                Execute-InstallJob -PackageName $item.DisplayName -InstallBlock { & winget $using:wingetArgs } -state $state -Manager 'Winget'
-            }
-
-            if ($pkg.PSObject.Properties.Name -contains 'postInstallNotes' -and -not [string]::IsNullOrWhiteSpace($pkg.postInstallNotes)) {
-                $state.ManualActions.Add($pkg.postInstallNotes)
-            }
-        }
-
-        # Pausar solo si se realizó una acción y no hubo errores.
-        if ($packagesToProcess.Count -gt 0 -and -not $state.FatalErrorOccurred) {
-            Pause-And-Return
         }
     }
 }
-
 
 function Invoke-Phase2_SoftwareMenu {
     param([PSCustomObject]$state, [string]$CatalogPath)
@@ -231,7 +245,7 @@ function Invoke-Phase2_SoftwareMenu {
         Write-Styled -Type Step -Message "[0] Volver al Menú Principal"
         Write-Host
 
-        $choice = Invoke-MenuPrompt -ValidChoices @('1', '2', '0')
+        $choice = Invoke-MenuPrompt -ValidChoices @('1', '2', '0') -PromptMessage "Seleccione una opción"
 
         switch ($choice) {
             '1' {
@@ -246,8 +260,6 @@ function Invoke-Phase2_SoftwareMenu {
         }
     }
 
-    # El estado de 'SoftwareInstalled' se podría manejar de forma más granular,
-    # pero por ahora lo dejamos como estaba.
     if (-not $state.FatalErrorOccurred) { $state.SoftwareInstalled = $true }
     return $state
 }

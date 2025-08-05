@@ -6,6 +6,6 @@
         { "installId": "Microsoft.VisualStudioCode", "name": "Visual Studio Code" },
         { "installId": "9NKSQGP7F2NH", "checkName": "WhatsApp", "name": "WhatsApp", "source": "msstore" },
         { "installId": "Telegram.Unigram", "name": "Telegram (Unigram)" },
-        { "installId": "Zoom.Zoom", "name": "Zoom" }
+        { "installId": "Zoom.Zoom", "name": "Zoom" },
     ]
 }

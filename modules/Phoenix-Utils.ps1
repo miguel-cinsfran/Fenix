@@ -51,21 +51,6 @@ function Pause-And-Return {
     Read-Host | Out-Null
 }
 
-function Show-TemporaryError {
-    param([string]$ErrorMessage)
-    $up = $Global:Theme.Control.Up
-    $clear = $Global:Theme.Control.ClearLine
-    $start = $Global:Theme.Control.ToLineStart
-    
-    Write-Host "${start}${up}${clear}" -NoNewline
-    
-    $errorColor = $Global:Theme.Error
-    Write-Host " [ERROR] $ErrorMessage" -ForegroundColor $errorColor
-    Start-Sleep -Seconds 2
-    
-    Write-Host "${start}${up}${clear}" -NoNewline
-}
-
 function Invoke-MenuPrompt {
     param(
         [string]$PromptMessage = "Seleccione una opción",
@@ -74,19 +59,63 @@ function Invoke-MenuPrompt {
     
     try {
         while ($true) {
-            Write-Styled -Type Consent -Message "${PromptMessage}: " -NoNewline
-            $input = (Read-Host).Trim().ToUpper()
+            # Usar Read-Host con -Prompt es más robusto que Write-Host -NoNewline
+            $input = (Read-Host -Prompt "  -> $PromptMessage").Trim().ToUpper()
 
             if ($ValidChoices -contains $input) {
                 return $input
             }
 
-            Show-TemporaryError -ErrorMessage "Opción no válida. Por favor, intente de nuevo."
+            # La manipulación del cursor con ANSI es frágil. Un mensaje de error simple es más seguro.
+            Write-Host " [ERROR] Opción no válida. Por favor, intente de nuevo." -ForegroundColor $Global:Theme.Error
+            Start-Sleep -Seconds 1
+            # El bucle se repetirá, el menú se volverá a dibujar y el prompt aparecerá de nuevo.
+            # Esto es un poco más 'ruidoso' para el usuario, pero evita que la entrada se bloquee.
+            # En este caso, la robustez es más importante que la elegancia visual.
         }
     } catch [System.Management.Automation.PipelineStoppedException] {
         # Capturada por el manejador de Ctrl+C del lanzador, simplemente re-lanzar.
         throw
     }
+}
+
+function Invoke-JobWithTimeout {
+    param(
+        [scriptblock]$ScriptBlock,
+        [int]$TimeoutSeconds = 120,
+        [string]$Activity = "Ejecutando operación en segundo plano..."
+    )
+
+    $job = Start-Job -ScriptBlock $ScriptBlock
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    $timeout = New-TimeSpan -Seconds $TimeoutSeconds
+
+    while ($job.State -eq 'Running' -and $timer.Elapsed -lt $timeout) {
+        Write-Progress -Activity $Activity -Status "Tiempo restante: $(($timeout - $timer.Elapsed).ToString('mm\:ss'))" -PercentComplete (($timer.Elapsed.TotalSeconds / $TimeoutSeconds) * 100)
+        Start-Sleep -Milliseconds 250
+    }
+    Write-Progress -Activity $Activity -Completed
+
+    $result = [PSCustomObject]@{
+        Success = $false
+        Output = @()
+        Error = ""
+    }
+
+    if ($job.State -eq 'Running') {
+        $result.Error = "La operación excedió el tiempo de espera de $TimeoutSeconds segundos y fue terminada."
+        Stop-Job $job -Force
+    }
+    elseif ($job.State -eq 'Failed') {
+        $result.Error = ($job.Error | Select-Object -First 1).Exception.Message
+    }
+    else {
+        $result.Success = $true
+    }
+
+    $result.Output = Receive-Job $job
+    Remove-Job $job -Force
+    return $result
 }
 
 

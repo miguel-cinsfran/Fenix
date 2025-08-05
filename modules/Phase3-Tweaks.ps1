@@ -5,7 +5,7 @@
     Presenta un menú interactivo de "tweaks" del sistema, con verificación de estado
     precisa y manejo de errores robusto (en teoría), incluyendo manipulación de ACL para claves protegidas.
 .NOTES
-    Versión: 3.4
+    Versión: 4.0
     Autor: miguel-cinsfran
 #>
 
@@ -123,7 +123,6 @@ function Apply-RegistryWithExplorerRestart {
     Write-Styled -Message "Aplicando ajuste para '$($Tweak.description)'..." -NoNewline
     $details = $Tweak.details
     $success = $false
-    $errorMessage = "Error no especificado durante la operación."
 
     try {
         Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
@@ -132,18 +131,15 @@ function Apply-RegistryWithExplorerRestart {
         New-ItemProperty -Path $details.path -Name $details.name -Value $details.value -PropertyType $details.valueType -Force -ErrorAction Stop
         $success = $true
     } catch {
-        # El error se captura aquí principalmente para asegurar que explorer.exe se reinicie siempre.
-        # El fallo se registrará en el bloque de abajo.
-        $errorMessage = $_.Exception.Message
     } finally {
-        Start-Process explorer.exe | Out-Null
+        Start-Process explorer.exe
     }
 
     if ($success) {
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
     } else {
         Write-Host " [FALLO]" -F $Global:Theme.Error
-        Write-Styled -Type Log -Message "Error al aplicar '$($Tweak.id)': $errorMessage"
+        Write-Styled -Type Log -Message "Error al aplicar '$($Tweak.id)': $($_.Exception.Message)"
     }
     return $success
 }
