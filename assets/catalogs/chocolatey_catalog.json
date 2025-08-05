@@ -3,7 +3,7 @@
     "items": [
         { "installId": "git", "name": "Git" },
         { "installId": "visualstudio2022-workload-vctools", "name": "Visual Studio Build Tools" },
-        { "installId": "postgresql15", "name": "PostgreSQL 15", "special_params": "/Password:1122" },
+        { "installId": "postgresql15", "name": "PostgreSQL 15", "special_params": "/Password:1122", "postInstallNotes": "Recordatorio: La contraseña para PostgreSQL se estableció como '1122'. Cámbiela." },
         { "installId": "gh", "name": "GitHub CLI" },
         { "installId": "yt-dlp" },
         { "installId": "jq" },

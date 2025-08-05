@@ -13,23 +13,42 @@ function Audit-And-Repair-UserShellFolders {
     param([PSCustomObject]$state)
     Write-Styled -Type SubStep -Message "Auditando rutas de carpetas de usuario en el Registro..."
     $keysToAudit = @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders", "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
-    $issuesFound = @()
+    $proposedChanges = @()
+    $pattern = [regex]::Escape($env:USERPROFILE) + '.*\\OneDrive'
+
     foreach ($keyPath in $keysToAudit) {
         $item = Get-Item -Path $keyPath
         foreach ($valueName in $item.GetValueNames()) {
             $value = $item.GetValue($valueName)
             if ($value -is [string] -and $value -like "*OneDrive*") {
-                $issuesFound += [PSCustomObject]@{ Key = $keyPath; Name = $valueName; BadValue = $value }
+                $newValue = $value -replace $pattern, "$env:USERPROFILE"
+                # Solo proponer el cambio si el valor nuevo es diferente.
+                if ($newValue -ne $value) {
+                    $proposedChanges += [PSCustomObject]@{
+                        Key      = $keyPath
+                        Name     = $valueName
+                        OldValue = $value
+                        NewValue = $newValue
+                    }
+                }
             }
         }
     }
-    if ($issuesFound.Count -eq 0) { Write-Styled -Type Success -Message "No se encontraron rutas de OneDrive en el Registro."; return }
-    Write-Styled -Type Warn -Message "Se encontraron $($issuesFound.Count) rutas del Registro apuntando a OneDrive:"
-    $issuesFound | ForEach-Object { Write-Styled -Type Info -Message "  $($_.Name) = '$($_.BadValue)'" }
+
+    if ($proposedChanges.Count -eq 0) { Write-Styled -Type Success -Message "No se encontraron rutas de OneDrive que requieran corrección."; return }
+
+    Write-Styled -Type Warn -Message "Se encontraron $($proposedChanges.Count) rutas del Registro que apuntan a OneDrive y pueden ser corregidas:"
+    $proposedChanges | ForEach-Object {
+        Write-Host
+        Write-Styled -Type Info -Message "  $($_.Name)"
+        Write-Styled -Type Log -Message "    Valor Actual:  '$($_.OldValue)'"
+        Write-Styled -Type Success -Message "    Valor Propuesto: '$($_.NewValue)'"
+    }
+
     Write-Styled -Type Consent -Message "`nADVERTENCIA: La reparación de estas rutas es una operación de alto riesgo."
-    if ((Read-Host "¿Autoriza al script a intentar corregir estas entradas? (S/N)").Trim().ToUpper() -eq 'S') {
+    if ((Read-Host "¿Autoriza al script a aplicar estas correcciones? (S/N)").Trim().ToUpper() -eq 'S') {
         Write-Styled -Message "Reparando claves del Registro..." -NoNewline
-        $issuesFound | ForEach-Object { $pattern = [regex]::Escape($env:USERPROFILE) + '.*\\OneDrive'; $newValue = $_.BadValue -replace $pattern, "$env:USERPROFILE"; Set-ItemProperty -Path $_.Key -Name $_.Name -Value $newValue -Type ExpandString }
+        $proposedChanges | ForEach-Object { Set-ItemProperty -Path $_.Key -Name $_.Name -Value $_.NewValue -Type ExpandString }
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
         Write-Styled -Message "Reiniciando Explorador para aplicar cambios..." -NoNewline; Get-Process explorer | Stop-Process -Force; Write-Host " [ÉXITO]" -F $Global:Theme.Success
         $state.ManualActions.Add("Se han corregido rutas del Registro. Se recomienda reiniciar el equipo para garantizar la correcta aplicación de los cambios.")

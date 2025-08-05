@@ -5,7 +5,7 @@
     Presenta un menú interactivo de "tweaks" del sistema, con verificación de estado
     precisa y manejo de errores robusto (en teoría), incluyendo manipulación de ACL para claves protegidas.
 .NOTES
-    Versión: 3.2
+    Versión: 3.3
     Autor: miguel-cinsfran
 #>
 
@@ -18,6 +18,7 @@ function Verify-RegistryTweak {
     } catch {
         # Si Get-ItemProperty falla, la ruta o la propiedad no existen.
         # Para cualquier Tweak que busque establecer un valor, este estado es 'Pendiente'.
+        # Esto corrige el bug donde LeftAlignTaskbar se marcaba como 'Aplicado' incorrectamente.
         return "Pendiente"
     }
 
@@ -182,91 +183,81 @@ function Apply-Tweak {
 
 function Invoke-Phase3_Tweaks {
     param([PSCustomObject]$state, [string]$CatalogPath)
-
     if ($state.FatalErrorOccurred) { return $state }
-    if (-not (Test-Path $CatalogPath)) {
-        Write-Styled -Type Error -Message "No se encontró el catálogo de tweaks en '$CatalogPath'."
-        $state.FatalErrorOccurred = $true
-        return $state
-    }
-
+    if (-not (Test-Path $CatalogPath)) { Write-Styled -Type Error -Message "No se encontró el catálogo de tweaks en '$CatalogPath'."; $state.FatalErrorOccurred = $true; return $state }
     $tweaks = (Get-Content -Raw -Path $CatalogPath -Encoding UTF8 | ConvertFrom-Json).items
-    $needsReboot = $false
+    $anyTweakApplied = $false
     $exitMenu = $false
-
     while (-not $exitMenu) {
         Show-Header -Title "FASE 3: Optimización del Sistema"
-
-        $tweakStatusList = foreach ($tweak in $tweaks) {
-            $status = switch ($tweak.type) {
-                'Registry'                  { Verify-RegistryTweak -Tweak $tweak }
-                'ProtectedRegistry'         { Verify-RegistryTweak -Tweak $tweak }
-                'RegistryWithExplorerRestart' { Verify-RegistryTweak -Tweak $tweak }
-                'AppxPackage'               { Verify-AppxPackage -Tweak $tweak }
-                'PowerPlan'                 { Verify-PowerPlanTweak -Tweak $tweak }
-                'Service'                   { Verify-ServiceTweak -Tweak $tweak }
-                'PowerShellCommand'         { Verify-PowerShellCommandTweak -Tweak $tweak }
-                default                     { "Error" }
+        $tweakStatusList = @()
+        foreach ($tweak in $tweaks) {
+            $status = "Error"
+            switch ($tweak.type) {
+                'Registry' { $status = Verify-RegistryTweak -Tweak $tweak }
+                'ProtectedRegistry' { $status = Verify-RegistryTweak -Tweak $tweak }
+                'AppxPackage' { $status = Verify-AppxPackage -Tweak $tweak }
+                'RegistryWithExplorerRestart' { $status = Verify-RegistryTweak -Tweak $tweak }
+                'PowerPlan' { $status = Verify-PowerPlanTweak -Tweak $tweak }
+                'Service' { $status = Verify-ServiceTweak -Tweak $tweak }
+                'PowerShellCommand' { $status = Verify-PowerShellCommandTweak -Tweak $tweak }
             }
-            [PSCustomObject]@{ Tweak = $tweak; Status = $status }
+            $tweakStatusList += [PSCustomObject]@{ Tweak = $tweak; Status = $status }
         }
-
         for ($i = 0; $i -lt $tweakStatusList.Count; $i++) {
             $item = $tweakStatusList[$i]
             $statusString = "[{0}]" -f $item.Status.ToUpper()
             Write-Styled -Type Step -Message "[$($i+1)] $($item.Tweak.description) $statusString"
         }
-
         Write-Host; Write-Styled -Type Consent -Message "[A] Aplicar TODOS los pendientes"; Write-Styled -Type Consent -Message "[0] Volver al Menú Principal"; Write-Host
         
         $numericChoices = 1..$tweakStatusList.Count
         $validChoices = @($numericChoices) + @('A', '0')
         $choice = Invoke-MenuPrompt -ValidChoices $validChoices
 
-        $tweaksToProcess = @()
+        $actionTaken = $false
         switch ($choice) {
             'A' {
-                $tweaksToProcess = $tweakStatusList | Where-Object { $_.Status -eq 'Pendiente' }
-                if ($tweaksToProcess.Count -eq 0) { Write-Styled -Type Warn -Message "No hay ajustes pendientes."; Start-Sleep -Seconds 2; continue }
+                $pendingTweaks = $tweakStatusList | Where-Object { $_.Status -eq 'Pendiente' }
+                if ($pendingTweaks.Count -eq 0) { Write-Styled -Type Warn -Message "No hay ajustes pendientes."; Start-Sleep -Seconds 2; continue }
+                foreach ($item in $pendingTweaks) {
+                    $tweakToApply = $item.Tweak
+                    $applyFunction = switch ($tweakToApply.type) {
+                        'ProtectedRegistry' { ${function:Apply-ProtectedRegistryTweak} }
+                        'RegistryWithExplorerRestart' { ${function:Apply-RegistryWithExplorerRestart} }
+                        default { ${function:Apply-Tweak} }
+                    }
+                    if (-not (& $applyFunction -Tweak $tweakToApply)) { $state.FatalErrorOccurred = $true; break }
+                    $anyTweakApplied = $true
+                }
+                $actionTaken = $true
             }
-            '0' { $exitMenu = $true; continue }
+            '0' { $exitMenu = $true }
             default {
                 $selectedItem = $tweakStatusList[[int]$choice - 1]
                 if ($selectedItem.Status -ne 'Pendiente') { Write-Styled -Type Warn -Message "Este ajuste no está pendiente."; Start-Sleep -Seconds 2; continue }
-                $tweaksToProcess = @($selectedItem)
+                $tweakToApply = $selectedItem.Tweak
+                $applyFunction = switch ($tweakToApply.type) {
+                    'ProtectedRegistry' { ${function:Apply-ProtectedRegistryTweak} }
+                    'RegistryWithExplorerRestart' { ${function:Apply-RegistryWithExplorerRestart} }
+                    default { ${function:Apply-Tweak} }
+                }
+                if ((& $applyFunction -Tweak $tweakToApply)) { $anyTweakApplied = $true } else { $state.FatalErrorOccurred = $true }
+                $actionTaken = $true
             }
         }
-
-        $anyTweakAppliedInLoop = $false
-        foreach ($item in $tweaksToProcess) {
-            $tweak = $item.Tweak
-            $applyFunction = switch ($tweak.type) {
-                'ProtectedRegistry'         { ${function:Apply-ProtectedRegistryTweak} }
-                'RegistryWithExplorerRestart' { ${function:Apply-RegistryWithExplorerRestart} }
-                default                     { ${function:Apply-Tweak} }
-            }
-
-            $success = & $applyFunction -Tweak $tweak
-            if ($success) {
-                $anyTweakAppliedInLoop = $true
-                if ($tweak.type -ne 'PowerPlan') { $needsReboot = $true }
-            } else {
-                $state.FatalErrorOccurred = $true
-                break
-            }
-        }
-
-        if ($state.FatalErrorOccurred) {
-            $exitMenu = $true
-        } elseif ($anyTweakAppliedInLoop) {
+        if ($actionTaken -and -not $state.FatalErrorOccurred) {
             Pause-And-Return
+            if ($tweaks | Where-Object { $_.type -eq 'AppxPackage' -and $_.id -eq $tweakToApply.id }) {
+                $state.ManualActions.Add("Se ha eliminado un paquete de aplicación. Se recomienda reiniciar el equipo.")
+            }
         }
+        if ($state.FatalErrorOccurred) { $exitMenu = $true }
     }
-
     if (-not $state.FatalErrorOccurred) {
         $state.TweaksApplied = $true
-        if ($needsReboot) {
-            $state.ManualActions.Add("Se han aplicado ajustes del sistema. Se recomienda reiniciar el equipo para que todos los cambios surtan efecto.")
+        if ($anyTweakApplied -and -not ($tweaks | Where-Object { $_.type -eq 'AppxPackage' })) {
+            $state.ManualActions.Add("Se han aplicado ajustes del sistema. Se recomienda reiniciar el equipo.")
         }
     }
     return $state

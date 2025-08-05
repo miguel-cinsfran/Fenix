@@ -25,6 +25,10 @@
             "special_params": {
                 "description": "Parámetros de instalación especiales, solo aplicable a Chocolatey.",
                 "type": "string"
+            },
+            "postInstallNotes": {
+                "description": "Opcional. Una nota de texto que se agregará a las 'Acciones Manuales Requeridas' después de una instalación exitosa.",
+                "type": "string"
             }
         },
         "required": [

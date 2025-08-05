@@ -13,8 +13,7 @@ function Execute-InstallJob {
     param(
         [string]$PackageName, 
         [scriptblock]$InstallBlock, 
-        [PSCustomObject]$state,
-        [string]$Manager
+        [PSCustomObject]$state
     )
 
     $job = Start-Job -ScriptBlock $InstallBlock
@@ -30,21 +29,14 @@ function Execute-InstallJob {
         $jobFailed = $false
         $failureReason = ""
 
-        if ($job.State -ne 'Completed') {
+        # Comprobación de errores mucho más robusta que el análisis de cadenas de texto.
+        if ($job.State -ne 'Completed' -or $job.Error.Count -gt 0) {
             $jobFailed = $true
-            $failureReason = "El estado del trabajo fue '$($job.State)'."
-        } else {
-            if ($Manager -eq 'Chocolatey') {
-                if ($jobOutput -match "not found|was not found") {
-                    $jobFailed = $true
-                    $failureReason = "Chocolatey no pudo encontrar el paquete."
-                }
-            }
-            elseif ($Manager -eq 'Winget') {
-                if ($jobOutput -match "No se encontró ningún paquete|No package found") {
-                    $jobFailed = $true
-                    $failureReason = "Winget no pudo encontrar el paquete."
-                }
+            if ($job.Error.Count -gt 0) {
+                # Captura el primer error real del stream de errores del trabajo.
+                $failureReason = ($job.Error | Select-Object -First 1).Exception.Message
+            } else {
+                $failureReason = "El estado del trabajo fue '$($job.State)' en lugar de 'Completed'."
             }
         }
 
@@ -86,8 +78,7 @@ function Install-SoftwareCatalog {
             if ($checkResult) { $version = ($checkResult -split '\|')[1].Trim(); Write-Styled -Type Warn -Message "Ya instalado (Versión: $version), omitiendo."; continue }
             $chocoArgs = @("install", $pkg.installId, "-y", "--no-progress")
             if ($pkg.PSObject.Properties.Name -contains 'special_params') { $chocoArgs += "--params='$($pkg.special_params)'" }
-            Execute-InstallJob -PackageName $displayName -InstallBlock { & choco $using:chocoArgs } -state $state -Manager 'Chocolatey'
-            if ($pkg.installId -eq 'postgresql15') { $state.ManualActions.Add("Recordatorio: La contraseña para PostgreSQL se estableció como '1122'. Cámbiela.") }
+            Execute-InstallJob -PackageName $displayName -InstallBlock { & choco $using:chocoArgs } -state $state
         }
         elseif ($Manager -eq 'Winget') {
             $wingetListArgs = @("list", "--disable-interactivity")
@@ -100,8 +91,11 @@ function Install-SoftwareCatalog {
             if ($installedVersion) { Write-Styled -Type Warn -Message "Ya instalado (Versión: $installedVersion), omitiendo."; continue }
             $wingetInstallArgs = @("install", "--id", $pkg.installId, "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements")
             if ($pkg.source) { $wingetInstallArgs += "--source", $pkg.source }
-            Execute-InstallJob -PackageName $displayName -InstallBlock { & winget $using:wingetInstallArgs } -state $state -Manager 'Winget'
-            if ($pkg.installId -eq 'CoreyButler.NVMforWindows') { $state.ManualActions.Add("Para NVM: Abra un NUEVO terminal y ejecute 'nvm install lts' y 'nvm use lts'.") }
+            Execute-InstallJob -PackageName $displayName -InstallBlock { & winget $using:wingetInstallArgs } -state $state
+        }
+
+        if ($pkg.PSObject.Properties.Name -contains 'postInstallNotes' -and -not [string]::IsNullOrWhiteSpace($pkg.postInstallNotes)) {
+            $state.ManualActions.Add($pkg.postInstallNotes)
         }
     }
 }

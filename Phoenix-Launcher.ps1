@@ -12,7 +12,7 @@
 
 # SECCIÓN 0: CONFIGURACIÓN DE CODIFICACIÓN UNIVERSAL
 $OutputEncoding = [System.Text.Encoding]::UTF8
-[Console::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # SECCIÓN 1: AUTO-ELEVACIÓN DE PRIVILEGIOS
 if (-not ([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
