@@ -20,20 +20,6 @@ function _Enable-WindowsFeature {
     $state.ManualActions.Add("Se ha habilitado la característica '$FeatureName'. Se requiere un reinicio para completar la instalación.")
 }
 
-function _Test-WSLCommand {
-    # Intenta ejecutar un comando WSL básico. Devuelve $true si es exitoso, $false en caso contrario.
-    try {
-        $result = wsl.exe --status
-        # Si el comando se ejecuta pero devuelve un error conocido, también es un fallo.
-        if ($result -match "El Subsistema de Windows para Linux no estß instalado") {
-            return $false
-        }
-        return $true
-    } catch {
-        return $false
-    }
-}
-
 function Invoke-Phase4_WSL {
     param([PSCustomObject]$state)
     if ($state.FatalErrorOccurred) { return $state }
@@ -46,38 +32,32 @@ function Invoke-Phase4_WSL {
 
     try {
         Write-Styled -Type Step -Message "Verificando el estado actual de WSL..."
-        if (-not (_Test-WSLCommand)) {
+        $statusResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--status" -FailureStrings "no está instalado" -Activity "Chequeando estado de WSL"
+
+        if (-not $statusResult.Success) {
             Write-Styled -Type Warn -Message "WSL no está instalado o no es funcional."
             Write-Styled -Type Step -Message "Verificando prerrequisitos de Windows (VirtualMachinePlatform y Subsystem-Linux)..."
 
+            # Lógica de verificación y habilitación de características (sin cambios)
             $featuresToEnable = @()
             $vmPlatform = Get-WindowsOptionalFeature -Online -FeatureName "VirtualMachinePlatform"
             if ($vmPlatform.State -ne 'Enabled') { $featuresToEnable += "VirtualMachinePlatform" }
-
             $wslSubsystem = Get-WindowsOptionalFeature -Online -FeatureName "Microsoft-Windows-Subsystem-Linux"
             if ($wslSubsystem.State -ne 'Enabled') { $featuresToEnable += "Microsoft-Windows-Subsystem-Linux" }
-
             if ($featuresToEnable.Count -gt 0) {
                 Write-Styled -Type Warn -Message "Las siguientes características de Windows son necesarias y no están habilitadas:"
                 $featuresToEnable | ForEach-Object { Write-Styled -Type Info -Message "  - $_" }
-                Write-Styled -Type Consent -Message "El script puede intentar habilitarlas ahora. Esta operación requiere un REINICIO del sistema."
                 if ((Read-Host "¿Autoriza al script a habilitar estas características? (S/N)").Trim().ToUpper() -eq 'S') {
                     foreach ($feature in $featuresToEnable) { _Enable-WindowsFeature -FeatureName $feature -state $state }
                     Write-Styled -Type Success -Message "Se han habilitado las características. Por favor, reinicie el equipo y vuelva a ejecutar esta fase."
-                } else {
-                    Write-Styled -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos."
-                }
+                } else { Write-Styled -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos." }
                 Pause-And-Return; return $state
             }
 
             Write-Styled -Type Success -Message "Todos los prerrequisitos de Windows ya están habilitados."
             Write-Styled -Type Step -Message "Procediendo con la instalación de WSL y la distribución de Ubuntu por defecto..."
-            Write-Styled -Type Info -Message "Este proceso descargará componentes y puede tardar varios minutos."
-
-            $installResult = Invoke-JobWithTimeout -ScriptBlock { wsl.exe --install } -Activity "Instalando WSL y Ubuntu" -TimeoutSeconds 1800
-            if (-not $installResult.Success -or ($installResult.Output -join ' ') -match "Error") {
-                throw "La instalación de WSL falló. Salida: $($installResult.Output | Out-String)"
-            }
+            $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install" -FailureStrings "Error" -Activity "Instalando WSL y Ubuntu"
+            if (-not $installResult.Success) { throw "La instalación de WSL falló. Salida: $($installResult.Output)" }
 
             Write-Styled -Type Success -Message "La instalación de WSL parece haber sido exitosa."
             $state.ManualActions.Add("WSL y Ubuntu han sido instalados. Se requiere un reinicio para completar la configuración.")
@@ -86,23 +66,20 @@ function Invoke-Phase4_WSL {
         } else {
             Write-Styled -Type Success -Message "WSL ya está instalado y operativo."
             Write-Styled -Type Step -Message "Actualizando WSL al núcleo más reciente..."
-            $updateResult = Invoke-JobWithTimeout -ScriptBlock { wsl.exe --update } -Activity "Actualizando WSL"
-            if (-not $updateResult.Success) { Write-Styled -Type Warn -Message "No se pudo actualizar el núcleo de WSL. Puede que ya esté actualizado o no haya conexión."}
-            else { Write-Styled -Type Success -Message "WSL actualizado correctamente." }
+            Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--update" -Activity "Actualizando WSL" | Out-Null # El éxito no es crítico aquí
 
             Write-Styled -Type Step -Message "Verificando distribuciones instaladas..."
-            $distros = wsl.exe --list
-            if ($distros -match "No hay distribuciones instaladas.") {
+            $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones"
+            if ($listResult.Output -match "No hay distribuciones instaladas") {
                 Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux."
-                Write-Styled -Type Consent -Message "El script puede instalar la distribución recomendada (Ubuntu)."
-                 if ((Read-Host "¿Desea instalar Ubuntu ahora? (S/N)").Trim().ToUpper() -eq 'S') {
-                    $installDistroResult = Invoke-JobWithTimeout -ScriptBlock { wsl.exe --install --distribution Ubuntu } -Activity "Instalando Ubuntu" -TimeoutSeconds 600
-                    if (-not $installDistroResult.Success) { throw "Error al instalar Ubuntu: $($installDistroResult.Error)" }
+                if ((Read-Host "¿Desea instalar la distribución recomendada (Ubuntu) ahora? (S/N)").Trim().ToUpper() -eq 'S') {
+                    $installDistroResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution Ubuntu" -FailureStrings "Error" -Activity "Instalando Ubuntu"
+                    if (-not $installDistroResult.Success) { throw "Error al instalar Ubuntu: $($installDistroResult.Output)" }
                     Write-Styled -Type Success -Message "Ubuntu instalado correctamente."
-                 }
+                }
             } else {
                 Write-Styled -Type Success -Message "Se encontraron las siguientes distribuciones:"
-                $distros | ForEach-Object { Write-Styled -Type Info -Message "  $_" }
+                $listResult.Output | ForEach-Object { if ($_ -and $_ -notmatch "instalar distribuciones") { Write-Styled -Type Info -Message "  $_" } }
             }
         }
 

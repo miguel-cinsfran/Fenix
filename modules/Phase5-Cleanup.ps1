@@ -70,19 +70,31 @@ function _Invoke-AnalyzeProcesses {
     param($Task)
     Write-Styled -Type Info -Message "Analizando procesos del sistema..."
 
-    # Excluir el proceso 'Idle' y manejar errores de acceso en otros procesos del sistema.
-    $processes = Get-Process | Where-Object { $_.ProcessName -ne 'Idle' }
+    $processList = @()
+    $processes = Get-Process
+    foreach ($p in $processes) {
+        $cpuTime = 0
+        try {
+            # El acceso a TotalProcessorTime puede fallar para algunos procesos del sistema (p.ej. Idle)
+            $cpuTime = $p.TotalProcessorTime.TotalSeconds
+        } catch {
+            # Simplemente dejar en 0 si hay un error de acceso
+        }
+        $processList += [PSCustomObject]@{
+            Name = $p.ProcessName
+            Id = $p.Id
+            CPUTime = $cpuTime
+            Memory = $p.WorkingSet
+        }
+    }
 
     Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de CPU:"
-    $cpuTop = $processes | Select-Object *, @{Name="SafeTotalProcessorTime"; Expression={
-        try { return $_.TotalProcessorTime.TotalSeconds } catch { return 0 }
-    }} | Sort-Object -Property SafeTotalProcessorTime -Descending | Select-Object -First $Task.details.count
-
-    $cpuTop | Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.SafeTotalProcessorTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.WorkingSet / 1MB).ToString('F2')}} -AutoSize
+    $processList | Sort-Object -Property CPUTime -Descending | Select-Object -First $Task.details.count |
+        Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}} -AutoSize
 
     Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de Memoria (MB):"
-    $memTop = $processes | Sort-Object -Property WorkingSet -Descending | Select-Object -First $Task.details.count
-    $memTop | Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={(try {$_.TotalProcessorTime.TotalSeconds.ToString('F2')} catch {'N/A'})}}, @{Name="Memoria (MB)"; Expression={($_.WorkingSet / 1MB).ToString('F2')}} -AutoSize
+    $processList | Sort-Object -Property Memory -Descending | Select-Object -First $Task.details.count |
+        Format-Table -Property Name, Id, @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}, @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}} -AutoSize
 
     Pause-And-Return
 }
@@ -102,32 +114,27 @@ function _Invoke-SetDNS {
 function _Invoke-RecycleBinCleanup {
     param($Task)
     Write-Styled -Type SubStep -Message $Task.description
-    $shell = New-Object -ComObject Shell.Application
-    $recycleBin = $shell.NameSpace(0xA)
-    $itemCount = $recycleBin.Items().Count
+    try {
+        $shell = New-Object -ComObject Shell.Application
+        $recycleBin = $shell.NameSpace(0xA)
+        $itemCount = $recycleBin.Items().Count
 
-    if ($itemCount -eq 0) {
-        Write-Styled -Type Success -Message "La Papelera de Reciclaje ya está vacía."
-        Pause-And-Return
-        return
-    }
+        if ($itemCount -eq 0) {
+            Write-Styled -Type Success -Message "La Papelera de Reciclaje ya está vacía."
+        } else {
+            $totalSize = ($recycleBin.Items() | Measure-Object -Property Size -Sum).Sum
+            $sizeInMB = [math]::Round($totalSize / 1MB, 2)
 
-    # Calcular tamaño total. Esto puede ser lento si hay muchos archivos.
-    $totalSize = 0
-    foreach ($item in $recycleBin.Items()) {
-        $totalSize += $item.Size
-    }
-
-    $sizeInMB = [math]::Round($totalSize / 1MB, 2)
-    Write-Styled -Type Info -Message "Se encontraron $itemCount objeto(s) en la papelera, con un tamaño total de $sizeInMB MB."
-    Write-Styled -Type Consent -Message "¿Confirma que desea vaciar la papelera permanentemente?"
-    if ((Read-Host "(S/N)").Trim().ToUpper() -eq 'S') {
-        Write-Styled -Message "Vaciando papelera..." -NoNewline
-        Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
-        Write-Styled -Type Success -Message "Se han liberado $sizeInMB MB de espacio."
-    } else {
-        Write-Styled -Type Warn -Message "Operación cancelada."
+            Write-Styled -Type Info -Message "Se encontraron $itemCount objeto(s), con un tamaño total de $sizeInMB MB."
+            if ((Read-Host "¿Confirma que desea vaciar la papelera permanentemente? (S/N)").Trim().ToUpper() -eq 'S') {
+                Clear-RecycleBin -Force -ErrorAction Stop
+                Write-Styled -Type Success -Message "Se han liberado $sizeInMB MB de espacio."
+            } else {
+                Write-Styled -Type Warn -Message "Operación cancelada."
+            }
+        }
+    } catch {
+        Write-Styled -Type Error -Message "No se pudo procesar la Papelera de Reciclaje: $($_.Exception.Message)"
     }
     Pause-And-Return
 }
@@ -136,15 +143,13 @@ function _Invoke-WindowsUpdateCleanup {
     param($Task)
     Write-Styled -Type SubStep -Message $Task.description
     Write-Styled -Type Info -Message "Esta operación eliminará archivos de instalación de Windows Update que ya no son necesarios."
-    Write-Styled -Type Warn -Message "Puede liberar una cantidad significativa de espacio, pero puede tardar MUCHO tiempo en completarse."
-    Write-Styled -Type Consent -Message "¿Desea proceder con la limpieza?"
-    if ((Read-Host "(S/N)").Trim().ToUpper() -eq 'S') {
-        $command = "Dism.exe /Online /English /Cleanup-Image /StartComponentCleanup /ResetBase"
-        $result = Invoke-JobWithTimeout -ScriptBlock ([scriptblock]::Create($command)) -Activity "Limpiando archivos de Windows Update" -TimeoutSeconds 3600
+    Write-Styled -Type Warn -Message "Puede liberar una cantidad significativa de espacio y puede tardar mucho tiempo."
+    if ((Read-Host "¿Desea proceder con la limpieza profunda? (S/N)").Trim().ToUpper() -eq 'S') {
+        $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /English /Cleanup-Image /StartComponentCleanup /ResetBase" -FailureStrings "Error:" -Activity "Limpiando archivos de Windows Update"
         if ($result.Success) {
             Write-Styled -Type Success -Message "Tarea '$($Task.description)' completada."
         } else {
-            Write-Styled -Type Error -Message "La tarea '$($Task.description)' falló: $($result.Error)"
+            Write-Styled -Type Error -Message "La tarea '$($Task.description)' falló. Revise el log para más detalles."
         }
     } else {
         Write-Styled -Type Warn -Message "Operación cancelada."

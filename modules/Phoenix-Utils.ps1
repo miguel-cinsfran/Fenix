@@ -87,42 +87,51 @@ function Invoke-MenuPrompt {
 function Invoke-JobWithTimeout {
     param(
         [scriptblock]$ScriptBlock,
-        [int]$IdleTimeoutSeconds = 120, # Timeout si no hay actividad
-        [string]$Activity = "Ejecutando operación en segundo plano..."
+        [string]$Activity = "Ejecutando operación en segundo plano...",
+        [int]$TimeoutSeconds = 3600, # Un timeout general para evitar que el script se cuelgue indefinidamente
+        [boolean]$IdleTimeoutEnabled = $true,
+        [int]$IdleTimeoutSeconds = 300 # 5 minutos por defecto, como se observó
     )
 
     $job = Start-Job -ScriptBlock $ScriptBlock
+    $overallTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $overallTimeout = New-TimeSpan -Seconds $TimeoutSeconds
+
     $idleTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $idleTimeout = New-TimeSpan -Seconds $IdleTimeoutSeconds
+
     $lastOutputCount = 0
-    $lastPercentage = -1
 
-    Write-Styled -Type Info -Message "Iniciando tarea en segundo plano: $Activity"
-    while ($job.State -eq 'Running' -and $idleTimer.Elapsed -lt $idleTimeout) {
-        $status = "Tiempo de inactividad restante antes de cancelar: $(($idleTimeout - $idleTimer.Elapsed).ToString('mm\:ss'))"
+    Write-Styled -Type Info -Message "Iniciando tarea: $Activity"
 
-        $percent = if ($job.Progress.Count -gt 0) { $job.Progress[0].PercentComplete } else { -1 }
-
-        # El Write-Progress es útil visualmente, pero el Write-Host es clave para la accesibilidad.
-        Write-Progress -Activity $Activity -Status $status -PercentComplete $percent
-
-        if ($percent -ge 0 -and $percent -ne $lastPercentage) {
-            # \r mueve el cursor al inicio de la línea para que la siguiente escritura la sobreescriba.
-            # Se añade un espacio al final para limpiar cualquier carácter residual si la línea se acorta.
-            Write-Host "`rProgreso de la tarea: $percent% " -NoNewline
-            $lastPercentage = $percent
+    while ($job.State -eq 'Running') {
+        if ($overallTimer.Elapsed -gt $overallTimeout) {
+            Stop-Job $job
+            throw "La operación '$Activity' excedió el tiempo límite total de $TimeoutSeconds segundos."
         }
 
-        if ($job.ChildJobs[0].Output.Count -gt $lastOutputCount) {
+        if ($IdleTimeoutEnabled -and $idleTimer.Elapsed -gt $idleTimeout) {
+            Stop-Job $job
+            throw "La operación '$Activity' no mostró actividad por más de $IdleTimeoutSeconds segundos y fue terminada."
+        }
+
+        # Comprobar si hay nueva salida para reiniciar el temporizador de inactividad
+        $currentOutput = $job.ChildJobs[0].Output
+        if ($currentOutput.Count -gt $lastOutputCount) {
             $idleTimer.Restart()
-            $lastOutputCount = $job.ChildJobs[0].Output.Count
+            $lastOutputCount = $currentOutput.Count
         }
 
-        Start-Sleep -Milliseconds 500
+        $status = "Tiempo transcurrido: $($overallTimer.Elapsed.ToString('hh\:mm\:ss'))"
+        if ($IdleTimeoutEnabled) {
+            $status += " | Tiempo de inactividad restante: $(($idleTimeout - $idleTimer.Elapsed).ToString('mm\:ss'))"
+        }
+
+        Write-Progress -Activity $Activity -Status $status
+        Start-Sleep -Seconds 1
     }
+
     Write-Progress -Activity $Activity -Completed
-    # Limpiar la línea de progreso de texto al finalizar
-    Write-Host "`r" + (" " * 50) + "`r"
 
     $result = [PSCustomObject]@{
         Success = $false
@@ -130,14 +139,10 @@ function Invoke-JobWithTimeout {
         Error = ""
     }
 
-    if ($job.State -eq 'Running') {
-        $result.Error = "La operación no mostró actividad por más de $IdleTimeoutSeconds segundos y fue terminada."
-        Stop-Job $job
-    }
-    elseif ($job.State -eq 'Failed') {
-        $result.Error = ($job.Error | Select-Object -First 1).Exception.Message
-    }
-    else {
+    if ($job.State -eq 'Failed') {
+        $errorRecord = $job.ChildJobs[0].Error.ReadAll() | Select-Object -First 1
+        $result.Error = $errorRecord.Exception.Message
+    } else {
         $result.Success = $true
     }
 
@@ -194,4 +199,43 @@ function Invoke-PreFlightChecks {
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
     }
     Pause-And-Return -Message "Verificaciones completadas. Presione Enter para continuar..."
+}
+
+function Invoke-NativeCommand {
+    param(
+        [string]$Executable,
+        [string]$ArgumentList,
+        [string[]]$FailureStrings,
+        [string]$Activity,
+        [boolean]$IdleTimeoutEnabled = $true
+    )
+
+    $scriptBlock = [scriptblock]::Create("& `"$Executable`" $ArgumentList 2>&1; if (`$LASTEXITCODE -ne 0) { throw 'ExitCode: ' + `$LASTEXITCODE }")
+
+    $jobResult = Invoke-JobWithTimeout -ScriptBlock $scriptBlock -Activity $Activity -IdleTimeoutEnabled $IdleTimeoutEnabled
+
+    $outputString = $jobResult.Output -join "`n"
+
+    $result = [PSCustomObject]@{
+        Success = $jobResult.Success
+        Output = $outputString
+    }
+
+    if ($jobResult.Error -match "ExitCode: (\d+)") {
+        $result.Success = $false
+        Write-Styled -Type Error -Message "El comando '$Executable' terminó con código de error: $($matches[1])."
+    }
+
+    # Incluso si el código de salida es 0, buscar cadenas de error en la salida
+    if ($result.Success) {
+        foreach ($failureString in $FailureStrings) {
+            if ($result.Output -match $failureString) {
+                $result.Success = $false
+                Write-Styled -Type Warn -Message "Se encontró una cadena de error en la salida: '$failureString'"
+                break # Un fallo es suficiente
+            }
+        }
+    }
+
+    return $result
 }
