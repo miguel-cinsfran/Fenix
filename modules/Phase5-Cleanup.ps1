@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 5 para la limpieza y optimización del sistema.
 .DESCRIPTION

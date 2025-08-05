@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 4 para la instalación y configuración de WSL2.
 .DESCRIPTION
@@ -18,6 +18,54 @@ function _Enable-WindowsFeature {
     # Este comando requiere reinicio.
     Dism.exe /Online /Enable-Feature /FeatureName:$FeatureName /All /NoRestart
     $state.ManualActions.Add("Se ha habilitado la característica '$FeatureName'. Se requiere un reinicio para completar la instalación.")
+}
+
+function _Handle-Distro-Installation {
+    Write-Styled -Type Step -Message "Verificando distribuciones instaladas..."
+    $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones"
+
+    if (-not $listResult.Success) {
+        # Esto puede pasar si el comando wsl --list falla por alguna razón (ej. código de salida -1)
+        Write-Styled -Type Warn -Message "No se pudo determinar la lista de distribuciones, pero WSL parece estar instalado."
+        Write-Styled -Type Info -Message "Salida del comando: $($listResult.Output)"
+    }
+
+    if ($listResult.Output -match "No hay distribuciones instaladas" -or -not $listResult.Success) {
+        Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux instaladas."
+        if ((Read-Host "¿Desea buscar distribuciones disponibles para instalar online? (S/N)").Trim().ToUpper() -eq 'S') {
+            $onlineListResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --online" -Activity "Buscando distribuciones online"
+            if ($onlineListResult.Success) {
+                Write-Styled -Type Info -Message "Distribuciones disponibles:"
+                Write-Host ($onlineListResult.Output)
+                $distroToInstall = Read-Host "Escriba el nombre de la distribución que desea instalar (o presione Enter para instalar 'Ubuntu' por defecto)"
+                if (-not $distroToInstall) { $distroToInstall = "Ubuntu" }
+
+                $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall"
+                if ($installResult.Success) {
+                    Write-Styled -Type Success -Message "$distroToInstall instalado correctamente."
+                } else {
+                    throw "Error al instalar $distroToInstall: $($installResult.Output)"
+                }
+            }
+        }
+    } else {
+        Write-Styled -Type Success -Message "Se encontraron las siguientes distribuciones:"
+        $listResult.Output | ForEach-Object { if ($_ -and $_ -notmatch "instalar distribuciones") { Write-Styled -Type Info -Message "  $_" } }
+        if ((Read-Host "¿Desea instalar otra distribución? (S/N)").Trim().ToUpper() -eq 'S') {
+            # Se duplica la lógica de arriba para permitir instalar otra.
+            $onlineListResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --online" -Activity "Buscando distribuciones online"
+            if ($onlineListResult.Success) {
+                Write-Styled -Type Info -Message "Distribuciones disponibles:"
+                Write-Host ($onlineListResult.Output)
+                $distroToInstall = Read-Host "Escriba el nombre de la distribución que desea instalar"
+                if ($distroToInstall) {
+                    $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall"
+                    if ($installResult.Success) { Write-Styled -Type Success -Message "$distroToInstall instalado correctamente." }
+                    else { throw "Error al instalar $distroToInstall: $($installResult.Output)" }
+                }
+            }
+        }
+    }
 }
 
 function Invoke-Phase4_WSL {
@@ -74,21 +122,7 @@ function Invoke-Phase4_WSL {
             Write-Styled -Type Step -Message "Actualizando WSL al núcleo más reciente..."
             Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--update" -Activity "Actualizando WSL" | Out-Null
 
-            Write-Styled -Type Step -Message "Verificando distribuciones instaladas..."
-            $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones"
-            if ($listResult.Output -match "No hay distribuciones instaladas") {
-                Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux."
-                if ((Read-Host "¿Desea instalar la distribución recomendada (Ubuntu) ahora? (S/N)").Trim().ToUpper() -eq 'S') {
-                    $installDistroResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution Ubuntu" -FailureStrings "Error" -Activity "Instalando Ubuntu"
-                    if (-not $installDistroResult.Success) {
-                        throw "Error al instalar Ubuntu: $($installDistroResult.Output)"
-                    }
-                    Write-Styled -Type Success -Message "Ubuntu instalado correctamente."
-                }
-            } else {
-                Write-Styled -Type Success -Message "Se encontraron las siguientes distribuciones:"
-                $listResult.Output | ForEach-Object { if ($_ -and $_ -notmatch "instalar distribuciones") { Write-Styled -Type Info -Message "  $_" } }
-            }
+            _Handle-Distro-Installation
         }
 
         Write-Styled -Type Success -Message "Fase 4 completada."

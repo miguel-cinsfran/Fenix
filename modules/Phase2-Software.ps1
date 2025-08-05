@@ -40,8 +40,6 @@ function _Get-PackageStatus {
         [string]$Manager,
         [array]$CatalogPackages
     )
-
-    Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para $Manager..."
     $installedPackages = @{}
     $outdatedPackages = @{}
 
@@ -57,26 +55,34 @@ function _Get-PackageStatus {
         }
 
     } else { # Winget
-        foreach ($pkg in $CatalogPackages) {
-            Write-Progress -Activity "Consultando paquetes de Winget" -Status "Consultando: $($pkg.installId)"
-            $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --id $($pkg.installId) --accept-source-agreements" -Activity "Consultando $($pkg.installId)"
+        $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --disable-interactivity --accept-source-agreements" -Activity "Consultando paquetes de Winget"
+        if (-not $listResult.Success) { Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados."; return $null }
 
-            if ($listResult.Success -and $listResult.Output -match "No se encontraron paquetes que coincidan con los criterios de entrada") {
-                # El paquete no está instalado.
-            } elseif ($listResult.Success) {
-                $versionLine = $listResult.Output -split "`n" | Where-Object { $_ -match $pkg.installId }
-                if ($versionLine -match "v?(\d+(\.\d+)+)") {
-                    $installedPackages[$pkg.installId] = $matches[1]
+        $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --disable-interactivity --accept-source-agreements --include-unknown" -Activity "Buscando actualizaciones de Winget"
+
+        $installedLines = $listResult.Output -split "`n" | Select-Object -Skip 2
+        $upgradeLines = if ($upgradeResult.Success) { $upgradeResult.Output -split "`n" | Select-Object -Skip 2 } else { @() }
+
+        foreach ($pkg in $CatalogPackages) {
+            $checkId = if ($pkg.checkName) { $pkg.checkName } else { $pkg.installId }
+            $regexId = [regex]::Escape($checkId)
+
+            foreach ($line in $installedLines) {
+                if ($line -match "^$regexId\s+") {
+                    $parts = $line -split '\s{2,}' | Where-Object {$_}
+                    if ($parts.Count -ge 2) {
+                        $installedPackages[$pkg.installId] = $parts[1]
+                    }
+                    break
                 }
             }
-
-            $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --id $($pkg.installId) --accept-source-agreements" -Activity "Buscando actualización para $($pkg.installId)"
-            if ($upgradeResult.Success -and $upgradeResult.Output -match "No hay actualizaciones disponibles") {
-                # No hay actualizaciones.
-            } elseif ($upgradeResult.Success) {
-                $versionLine = $upgradeResult.Output -split "`n" | Where-Object { $_ -match $pkg.installId }
-                if ($versionLine -match 'v?(\d+(\.\d+)+)\s+v?(\d+(\.\d+)+)') {
-                     $outdatedPackages[$pkg.installId] = @{ Current = $matches[1]; Available = $matches[2] }
+            foreach ($line in $upgradeLines) {
+                if ($line -match "^$regexId\s+") {
+                    $parts = $line -split '\s{2,}' | Where-Object {$_}
+                    if ($parts.Count -ge 3) {
+                        $outdatedPackages[$pkg.installId] = @{ Current = $parts[1]; Available = $parts[2] }
+                    }
+                    break
                 }
             }
         }
@@ -125,14 +131,24 @@ function Invoke-SoftwareManagerUI {
 
     $exitManagerUI = $false
     while (-not $exitManagerUI) {
-        Show-Header -Title "FASE 2: Administrador de Paquetes ($Manager)"
+        Show-Header -Title "FASE 2: Administrador de Paquetes ($Manager)" -NoClear
 
+        Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para $Manager..."
         $packageStatusList = _Get-PackageStatus -Manager $Manager -CatalogPackages $catalogPackages
-        if ($null -eq $packageStatusList) { return }
+        if ($null -eq $packageStatusList) {
+            Write-Styled -Type Error -Message "No se pudo continuar debido a un error al obtener el estado de los paquetes."
+            Pause-And-Return
+            return
+        }
 
         Write-Styled -Type Title -Message "Estado de paquetes del catálogo:"
-        $packageStatusList | Format-Table -Property DisplayName, Status, VersionInfo -AutoSize
+        if ($packageStatusList.Count -eq 0) {
+            Write-Styled -Type Warn -Message "El catálogo de software está vacío."
+        } else {
+            $packageStatusList | Format-Table -Property DisplayName, Status, VersionInfo -AutoSize
+        }
 
+        # --- Menú Dinámico ---
         $menuOptions = @{}
         if (($packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }).Count -gt 0) {
             $menuOptions['I'] = "Instalar TODOS los paquetes pendientes"

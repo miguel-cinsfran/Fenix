@@ -66,5 +66,13 @@ function Invoke-Phase1_OneDrive {
         $state.FatalErrorOccurred = $true
         Write-Styled -Type Error -Message "Error fatal en la erradicación de OneDrive: $($_.Exception.Message)"
     }
+
+    if (-not ($state -is [PSCustomObject]) -or -not ($state.PSObject.Properties.Name -contains 'FatalErrorOccurred')) {
+        Write-Styled -Type Error -Message "CRITICAL: El objeto de estado se corrompió durante la Fase 1."
+        # No se puede confiar en el estado, así que no lo devolvemos.
+        # El lanzador detectará que el estado es nulo y se detendrá.
+        return $null
+    }
+
     return $state
 }
