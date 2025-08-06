@@ -5,7 +5,7 @@
     Este script es el único punto de entrada. Carga los módulos de fase, gestiona el estado
     global (con persistencia inteligente), el menú principal, el logging y el manejo de interrupciones.
 .NOTES
-    Versión: 1.2
+    Versión: 1.5
     Autor: miguel-cinsfran
     Requiere: Privilegios de Administrador. Estructura de directorios modular.
 #>
