@@ -62,7 +62,7 @@ function _Invoke-CleanupTask-FindLargeFiles {
 function _Invoke-CleanupTask-AnalyzeProcesses {
     param($Task)
     Write-Styled -Type Info -Message "Analizando procesos del sistema..."
-    $processList = Get-Process | Select-Object Name, Id, @{Name="Memory"; Expression={$_.WorkingSet}}, @{Name="CPUTime"; Expression={$_.TotalProcessorTime.TotalSeconds}}
+    $processList = Get-Process -ErrorAction SilentlyContinue | Select-Object Name, Id, @{Name="Memory"; Expression={$_.WorkingSet}}, @{Name="CPUTime"; Expression={$_.TotalProcessorTime.TotalSeconds}}
 
     $cpuFormat = @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}
     $memFormat = @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}}
@@ -82,9 +82,15 @@ function _Invoke-CleanupTask-SetDNS {
         return
     }
 
-    Write-Styled -Type SubStep -Message "Cambiando DNS a: $($Task.details.name)..."
-    Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Set-DnsClientServerAddress -ServerAddresses ($Task.details.servers)
-    Write-Styled -Type Success -Message "DNS cambiado correctamente."
+    try {
+        Write-Styled -Type SubStep -Message "Cambiando DNS a: $($Task.details.name)..."
+        $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
+        if ($null -eq $adapters) { throw "No se encontraron adaptadores de red activos." }
+        $adapters | Set-DnsClientServerAddress -ServerAddresses ($Task.details.servers) -ErrorAction Stop
+        Write-Styled -Type Success -Message "DNS cambiado correctamente."
+    } catch {
+        Write-Styled -Type Error -Message "No se pudo cambiar el DNS: $($_.Exception.Message)"
+    }
 }
 
 function _Invoke-CleanupTask-RecycleBinCleanup {

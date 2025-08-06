@@ -12,7 +12,10 @@
 function _Enable-WindowsFeature {
     param([string]$FeatureName)
     Write-Styled -Type SubStep -Message "Habilitando la característica de Windows: '$FeatureName'..."
-    Dism.exe /Online /Enable-Feature /FeatureName:$FeatureName /All /NoRestart
+    $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /Enable-Feature /FeatureName:$FeatureName /All /NoRestart" -Activity "Habilitando $FeatureName"
+    if (-not $result.Success) {
+        throw "DISM falló al intentar habilitar '$FeatureName'. Salida: $($result.Output)"
+    }
     Write-Styled -Type Warn -Message "Se ha habilitado la característica '$FeatureName'. Se requiere un reinicio para completar la instalación."
 }
 
@@ -26,13 +29,12 @@ function _Handle-Distro-Installation {
         Write-Styled -Type Consent -Message "El script puede intentar instalar la distribución 'Ubuntu' por defecto."
         if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea continuar con la instalación de Ubuntu?") -eq 'S') {
             $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution Ubuntu" -FailureStrings "Error" -Activity "Instalando Ubuntu"
-            if ($installResult.Success) {
-                Write-Styled -Type Success -Message "Ubuntu instalado correctamente."
-                # Refrescar la lista para mostrar la nueva distro
-                $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones"
-            } else {
-                Write-Styled -Type Error -Message "Error al instalar Ubuntu: $($installResult.Output)"
+            if (-not $installResult.Success) {
+                throw "Error al instalar Ubuntu: $($installResult.Output)"
             }
+            Write-Styled -Type Success -Message "Ubuntu instalado correctamente."
+            # Refrescar la lista para mostrar la nueva distro
+            $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones"
         }
     }
 
@@ -50,12 +52,11 @@ function _Handle-Distro-Installation {
             Write-Host ($onlineListResult.Output)
             $distroToInstall = Read-Host "Escriba el nombre de la distribución que desea instalar (o presione Enter para cancelar)"
             if ($distroToInstall) {
-                 $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall"
-                if ($installResult.Success) {
-                    Write-Styled -Type Success -Message "${distroToInstall} instalado correctamente."
-                } else {
+                $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall"
+                if (-not $installResult.Success) {
                     throw "Error al instalar ${distroToInstall}: $($installResult.Output)"
                 }
+                Write-Styled -Type Success -Message "${distroToInstall} instalado correctamente."
             }
         }
     }

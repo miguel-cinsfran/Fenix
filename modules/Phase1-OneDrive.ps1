@@ -32,11 +32,22 @@ function Audit-And-Repair-UserShellFolders {
     Write-Styled -Type Consent -Message "`nADVERTENCIA: La reparación de estas rutas es una operación de alto riesgo."
 
     if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Autoriza al script a intentar corregir estas entradas?") -eq 'S') {
-        Write-Styled -Message "Reparando claves del Registro..." -NoNewline
-        $issuesFound | ForEach-Object { $pattern = [regex]::Escape($env:USERPROFILE) + '.*\\OneDrive'; $newValue = $_.BadValue -replace $pattern, "$env:USERPROFILE"; Set-ItemProperty -Path $_.Key -Name $_.Name -Value $newValue -Type ExpandString }
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
-        Write-Styled -Message "Reiniciando Explorador para aplicar cambios..." -NoNewline; Get-Process explorer | Stop-Process -Force; Write-Host " [ÉXITO]" -F $Global:Theme.Success
-        Invoke-RestartPrompt
+        try {
+            Write-Styled -Message "Reparando claves del Registro..." -NoNewline
+            $issuesFound | ForEach-Object {
+                $pattern = [regex]::Escape($env:USERPROFILE) + '.*\\OneDrive'
+                $newValue = $_.BadValue -replace $pattern, "$env:USERPROFILE"
+                Set-ItemProperty -Path $_.Key -Name $_.Name -Value $newValue -Type ExpandString -ErrorAction Stop
+            }
+            Write-Host " [ÉXITO]" -F $Global:Theme.Success
+            Write-Styled -Message "Reiniciando Explorador para aplicar cambios..." -NoNewline
+            Get-Process explorer | Stop-Process -Force
+            Write-Host " [ÉXITO]" -F $Global:Theme.Success
+            Invoke-RestartPrompt
+        } catch {
+            Write-Host " [FALLO]" -F $Global:Theme.Error
+            Write-Styled -Type Error -Message "No se pudieron reparar las claves del Registro: $($_.Exception.Message)"
+        }
     } else {
         Write-Styled -Type Error -Message "Consentimiento no otorgado. El Registro no ha sido modificado."
         Write-Styled -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Corrija manualmente las rutas del registro que apuntan a OneDrive."

@@ -296,3 +296,28 @@ function Invoke-NativeCommand {
 
     return $result
 }
+
+function Test-SoftwareCatalog {
+    param(
+        [psobject]$CatalogData,
+        [string]$CatalogFileName
+    )
+    if (-not $CatalogData.PSObject.Properties.Match('items')) {
+        Write-Styled -Type Error -Message "El fichero de catálogo '$($CatalogFileName)' no contiene la clave raíz 'items'."
+        return $false
+    }
+    if ($CatalogData.items -isnot [array]) {
+        Write-Styled -Type Error -Message "La clave 'items' en '$($CatalogFileName)' debe ser un array."
+        return $false
+    }
+
+    $isValid = $true
+    for ($i = 0; $i -lt $CatalogData.items.Count; $i++) {
+        $item = $CatalogData.items[$i]
+        if (-not $item.PSObject.Properties.Match('installId') -or -not $item.installId -or $item.installId -isnot [string]) {
+            Write-Styled -Type Error -Message "El item #$($i+1) en '$($CatalogFileName)' no tiene una propiedad 'installId' válida (string, no vacía)."
+            $isValid = $false
+        }
+    }
+    return $isValid
+}

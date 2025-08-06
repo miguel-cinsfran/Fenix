@@ -178,78 +178,106 @@ function _Get-WingetPackageStatus {
     return _Process-WingetCatalog -CatalogPackages $CatalogPackages -InstalledMap $installedVersionsById -UpgradableMap $upgradableVersionsById -InstalledMapByName $installedVersionsByName -UpgradableMapByName $upgradableVersionsByName
 }
 
+function _Parse-WingetListLine {
+    param([string]$Line)
+
+    # El formato de salida de 'winget list' es:
+    # Nombre               Id                  Versión      Disponible   Fuente
+    # --------------------------------------------------------------------------
+    # Git                  Git.Git             2.39.2       2.40.0       winget
+    # Google Chrome        Google.Chrome       110.0.5481.78
+    # 7-Zip 22.01 (x64)    7zip.7zip           22.01
+
+    $line = $Line.TrimEnd()
+    if ([string]::IsNullOrWhiteSpace($line)) { return $null }
+
+    # Dividir por 2 o más espacios para manejar nombres con espacios.
+    $parts = $line -split '\s{2,}' | Where-Object { $_ }
+    if ($parts.Count -lt 3) { return $null } # Línea malformada
+
+    # La última columna puede ser la fuente.
+    $source = ""
+    if ($parts[-1] -in @('winget', 'msstore')) {
+        $source = $parts[-1]
+        $parts = $parts[0..($parts.Count - 2)]
+    }
+
+    # Si después de quitar la fuente no quedan suficientes partes, la línea es inválida.
+    if ($parts.Count -lt 3) { return $null }
+
+    # Asignación de columnas de derecha a izquierda, que son más consistentes.
+    # El resto de las partes a la izquierda forman el nombre del paquete.
+    $name = ""; $id = ""; $version = ""; $available = ""
+
+    if ($parts.Count -ge 4) { # Formato con 'Disponible': Nombre, Id, Versión, Disponible
+        $available = $parts[-1]
+        $version = $parts[-2]
+        $id = $parts[-3]
+        $name = ($parts[0..($parts.Count - 4)] -join ' ').Trim()
+    } else { # Formato sin 'Disponible': Nombre, Id, Versión
+        $version = $parts[-1]
+        $id = $parts[-2]
+        $name = ($parts[0..($parts.Count - 3)] -join ' ').Trim()
+    }
+
+    # Ignorar valores no útiles para la versión disponible.
+    if ($available -in @('<unknown>', '<desconocido>')) {
+        $available = ""
+    }
+
+    return [PSCustomObject]@{
+        Name      = $name
+        Id        = $id
+        Version   = $version
+        Available = $available
+        Source    = $source
+    }
+}
+
 function _Get-WingetPackageStatus_Cli {
     param([array]$CatalogPackages)
 
     Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget (CLI)..."
-
-    # Una sola llamada para obtener toda la información. Es más rápido y la fuente de datos es consistente.
     $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --include-unknown --accept-source-agreements --disable-interactivity" -Activity "Listando todos los paquetes de Winget"
-
-    $installedById = @{}; $installedByName = @{}
-    $upgradableById = @{}; $upgradableByName = @{}
 
     if (-not $listResult.Success) {
         Write-Styled -Type Error -Message "El comando 'winget list' falló."
         return $null
     }
 
+    $installedById = @{}; $installedByName = @{}
+    $upgradableById = @{}; $upgradableByName = @{}
+
     $lines = $listResult.Output -split "`n"
-    # Buscar la línea de cabecera '----' para saber desde dónde empezar a leer datos.
+
+    # Encontrar el inicio de los datos, que es después de la línea de guiones '----'.
     $dataStartIndex = 0
-    while ($dataStartIndex -lt $lines.Length) {
-        if ($lines[$dataStartIndex] -match '^-+$') {
-            $dataStartIndex++; break
-        }
+    while ($dataStartIndex -lt $lines.Length -and $lines[$dataStartIndex] -notmatch '^-+$') {
         $dataStartIndex++
     }
+    $dataStartIndex++ # Moverse a la línea *después* de los guiones.
 
-    if ($dataStartIndex -ge $lines.Length) { # No se encontraron datos
-        return _Process-WingetCatalog -CatalogPackages $CatalogPackages -InstalledMap $installedById -UpgradableMap $upgradableById -InstalledMapByName $installedByName -UpgradableMapByName $upgradableByName
-    }
+    if ($dataStartIndex -ge $lines.Length) {
+        Write-Styled -Type Warn -Message "No se encontraron datos de paquetes en la salida de winget."
+    } else {
+        # Procesar cada línea de datos usando el nuevo parser.
+        $lines | Select-Object -Skip $dataStartIndex | ForEach-Object {
+            $parsed = _Parse-WingetListLine -Line $_
+            if (-not $parsed) { return } # Ignorar líneas en blanco o malformadas
 
-    # Procesar cada línea de datos
-    $lines | Select-Object -Skip $dataStartIndex | ForEach-Object {
-        $line = $_.TrimEnd()
-        if ([string]::IsNullOrWhiteSpace($line)) { return }
+            # Poblar los mapas de búsqueda.
+            if ($parsed.Id) { $installedById[$parsed.Id] = $parsed.Version }
+            if ($parsed.Name) { $installedByName[$parsed.Name] = $parsed.Version }
 
-        $parts = $line -split '\s{2,}' | Where-Object { $_ }
-        if ($parts.Count -lt 3) { return } # Ignorar líneas malformadas
-
-        # Extraer la fuente si existe (ej. 'winget', 'msstore')
-        $source = ""
-        if ($parts[-1] -in @('winget', 'msstore')) {
-            $source = $parts[-1]
-            $parts = $parts[0..($parts.Count - 2)] # Quitar la fuente para simplificar el resto del parseo
-        }
-
-        if ($parts.Count -lt 3) { return } # Se necesita al menos Nombre, Id y Versión
-
-        $name = ""; $id = ""; $version = ""; $available = ""
-
-        # Determinar si hay una versión disponible basándose en el número de columnas restantes
-        if ($parts.Count -ge 4) { # Asumir formato: Nombre, Id, Versión, Disponible
-            $available = $parts[-1]
-            $version = $parts[-2]
-            $id = $parts[-3]
-            $name = ($parts[0..($parts.Count - 4)] -join ' ').Trim()
-        } else { # Asumir formato: Nombre, Id, Versión
-            $version = $parts[-1]
-            $id = $parts[-2]
-            $name = ($parts[0..($parts.Count - 3)] -join ' ').Trim()
-        }
-
-        # Poblar mapas
-        if ($id) { $installedById[$id] = $version }
-        if ($name) { $installedByName[$name] = $version }
-
-        if ($available -and $available -ne '<unknown>' -and $available -ne '<desconocido>') {
-            $versionInfo = @{ Current = $version; Available = $available }
-            if ($id) { $upgradableById[$id] = $versionInfo }
-            if ($name) { $upgradableByName[$name] = $versionInfo }
+            if ($parsed.Available) {
+                $versionInfo = @{ Current = $parsed.Version; Available = $parsed.Available }
+                if ($parsed.Id) { $upgradableById[$parsed.Id] = $versionInfo }
+                if ($parsed.Name) { $upgradableByName[$parsed.Name] = $versionInfo }
+            }
         }
     }
 
+    # Usar la función de procesamiento de catálogo existente con los datos recopilados.
     return _Process-WingetCatalog -CatalogPackages $CatalogPackages -InstalledMap $installedById -UpgradableMap $upgradableById -InstalledMapByName $installedByName -UpgradableMapByName $upgradableByName
 }
 
@@ -388,30 +416,30 @@ function Invoke-SoftwareManagerUI {
     )
 
     try {
-        $catalogPackages = (Get-Content -Raw -Path $CatalogFile -Encoding UTF8 | ConvertFrom-Json).items
+        $catalogJson = Get-Content -Raw -Path $CatalogFile -Encoding UTF8 | ConvertFrom-Json
+        if (-not (Test-SoftwareCatalog -CatalogData $catalogJson -CatalogFileName (Split-Path $CatalogFile -Leaf))) {
+            Pause-And-Return
+            return
+        }
+        $catalogPackages = $catalogJson.items
     } catch {
-        Write-Styled -Type Error -Message "Fallo CRÍTICO al procesar '${CatalogFile}': $($_.Exception.Message)"
-        $state.FatalErrorOccurred = $true
+        Write-Styled -Type Error -Message "Fallo CRÍTICO al leer o procesar '${CatalogFile}': $($_.Exception.Message)"
         Pause-And-Return
         return
     }
 
+    # Asignar dinámicamente la función de estado y el nombre de la variable de caché.
+    $statusFunctionName = "_Get-${Manager}PackageStatus"
+    $cacheVariableName = "script:${Manager}StatusCache"
+
     $exitManagerUI = $false
     while (-not $exitManagerUI) {
-        Show-Header -Title "FASE 2: Administrador de Paquetes (${Manager})" -NoClear
-
-        # Determinar qué caché usar y obtener su valor
-        $packageStatusList = if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache } else { $script:wingetStatusCache }
-
+        # Obtener el estado de los paquetes, usando la caché si está disponible.
+        $packageStatusList = Get-Variable -Name $cacheVariableName -ErrorAction SilentlyContinue -ValueOnly
         if ($null -eq $packageStatusList) {
             Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para ${Manager} (puede tardar)..."
-            $packageStatusList = if ($Manager -eq 'Chocolatey') {
-                _Get-ChocolateyPackageStatus -CatalogPackages $catalogPackages
-            } else {
-                _Get-WingetPackageStatus -CatalogPackages $catalogPackages
-            }
-            # Guardar el resultado en la caché correcta
-            if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $packageStatusList } else { $script:wingetStatusCache = $packageStatusList }
+            $packageStatusList = & (Get-Command $statusFunctionName) -CatalogPackages $catalogPackages
+            Set-Variable -Name $cacheVariableName -Value $packageStatusList
         }
 
         if ($null -eq $packageStatusList) {
@@ -420,7 +448,7 @@ function Invoke-SoftwareManagerUI {
             return
         }
 
-        # Construir y mostrar el menú estandarizado
+        # Construir y mostrar el menú estandarizado.
         $menuItems = $packageStatusList | ForEach-Object {
             [PSCustomObject]@{
                 Description = "$($_.DisplayName) $($_.VersionInfo)".Trim()
@@ -433,35 +461,36 @@ function Invoke-SoftwareManagerUI {
              'R' = 'Refrescar la lista de paquetes.'
              '0' = 'Volver al menú anterior.'
         }
+        $title = "FASE 2: Administrador de Paquetes (${Manager})"
+        $choice = Invoke-StandardMenu -Title $title -MenuItems $menuItems -ActionOptions $actionOptions
 
-        $choice = Invoke-StandardMenu -Title "FASE 2: Administrador de Paquetes (${Manager})" -MenuItems $menuItems -ActionOptions $actionOptions
-
+        # Procesar la selección del usuario.
         switch ($choice) {
             'A' {
                 _Invoke-ProcessPendingPackages -Manager $Manager -PackageStatusList $packageStatusList
+                Set-Variable -Name $cacheVariableName -Value $null # Invalidar caché
             }
             'U' {
                 $upgradableItems = $packageStatusList | Where-Object { $_.IsUpgradable }
                 Show-Header -Title "Paquetes con Actualizaciones Disponibles (${Manager})"
                 if ($upgradableItems.Count -gt 0) {
-                    foreach ($item in $upgradableItems) {
-                        Write-Styled -Type Warn -Message "$($item.DisplayName) $($item.VersionInfo)"
-                    }
+                    $upgradableItems | ForEach-Object { Write-Styled -Type Warn -Message "$($_.DisplayName) $($_.VersionInfo)" }
                 } else {
                     Write-Styled -Type Info -Message "Todos los paquetes del catálogo están actualizados."
                 }
                 Pause-And-Return
-                continue
             }
             'R' {
-                if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $null } else { $script:wingetStatusCache = $null }
-                continue
+                Set-Variable -Name $cacheVariableName -Value $null # Invalidar caché
             }
             '0' { $exitManagerUI = $true }
-            default { # Es un número
+            default { # Es un número (selección de paquete individual)
                 $packageIndex = [int]$choice - 1
                 $selectedItem = $packageStatusList[$packageIndex]
                 _Invoke-SinglePackageMenu -Manager $Manager -Item $selectedItem
+                # La caché se invalida dentro de _Invoke-SinglePackageMenu, pero hacerlo
+                # de nuevo aquí es más seguro por si esa lógica cambia.
+                Set-Variable -Name $cacheVariableName -Value $null
             }
         }
     }
