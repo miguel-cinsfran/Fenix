@@ -153,20 +153,24 @@ function _Get-WingetPackageStatus {
     }
 
     Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget a través del módulo..."
+    $installedVersionsById = @{}; $installedVersionsByName = @{}
+    $upgradableVersionsById = @{}; $upgradableVersionsByName = @{}
     try {
         $allPackages = Get-WinGetPackage
-        $installedById = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Id -AsHashTable -AsString
-        $installedByName = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Name -AsHashTable -AsString
+        if ($null -ne $allPackages) {
+            # Crear mapas duales por ID y por Nombre para manejar todos los casos del catálogo.
+            $installedById = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Id -AsHashTable -AsString
+            $installedByName = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Name -AsHashTable -AsString
 
-        $upgradableById = $allPackages | Where-Object { $_.AvailableVersion } | Group-Object -Property Id -AsHashTable -AsString
-        $upgradableByName = $allPackages | Where-Object { $_.AvailableVersion } | Group-Object -Property Name -AsHashTable -AsString
+            $upgradableById = $allPackages | Where-Object { $_.AvailableVersion -and $_.InstalledVersion } | Group-Object -Property Id -AsHashTable -AsString
+            $upgradableByName = $allPackages | Where-Object { $_.AvailableVersion -and $_.InstalledVersion } | Group-Object -Property Name -AsHashTable -AsString
 
-        # Para los mapas de versiones, necesitamos extraer la propiedad correcta
-        $installedVersionsById = @{}; $installedById.GetEnumerator() | ForEach-Object { $installedVersionsById[$_.Name] = $_.Value[0].InstalledVersion }
-        $installedVersionsByName = @{}; $installedByName.GetEnumerator() | ForEach-Object { $installedVersionsByName[$_.Name] = $_.Value[0].InstalledVersion }
-        $upgradableVersionsById = @{}; $upgradableById.GetEnumerator() | ForEach-Object { $upgradableVersionsById[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } }
-        $upgradableVersionsByName = @{}; $upgradableByName.GetEnumerator() | ForEach-Object { $upgradableVersionsByName[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } }
-
+            # Para los mapas de versiones, necesitamos extraer la propiedad correcta, verificando que no sean nulos.
+            if ($null -ne $installedById) { $installedById.GetEnumerator() | ForEach-Object { $installedVersionsById[$_.Name] = $_.Value[0].InstalledVersion } }
+            if ($null -ne $installedByName) { $installedByName.GetEnumerator() | ForEach-Object { $installedVersionsByName[$_.Name] = $_.Value[0].InstalledVersion } }
+            if ($null -ne $upgradableById) { $upgradableById.GetEnumerator() | ForEach-Object { $upgradableVersionsById[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } } }
+            if ($null -ne $upgradableByName) { $upgradableByName.GetEnumerator() | ForEach-Object { $upgradableVersionsByName[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } } }
+        }
     } catch {
         Write-Styled -Type Error -Message "Fallo crítico al obtener la lista de paquetes de Winget: $($_.Exception.Message)"; return $null
     }
@@ -281,11 +285,20 @@ function _Invoke-SinglePackageMenu {
         $choice = Invoke-MenuPrompt -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" })
 
         switch ($choice) {
-            'I' { _Install-Package -Manager $Manager -Item $Item; $exitMenu = $true }
-            'A' { _Update-Package -Manager $Manager -Item $Item; $exitMenu = $true }
+            'I' {
+                _Install-Package -Manager $Manager -Item $Item
+                if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $null } else { $script:wingetStatusCache = $null }
+                $exitMenu = $true
+            }
+            'A' {
+                _Update-Package -Manager $Manager -Item $Item
+                if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $null } else { $script:wingetStatusCache = $null }
+                $exitMenu = $true
+            }
             'D' {
                 if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Está seguro que desea desinstalar $($Item.DisplayName)?") -eq 'S') {
                     _Uninstall-Package -Manager $Manager -Item $Item
+                    if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $null } else { $script:wingetStatusCache = $null }
                 }
                 $exitMenu = $true
             }
@@ -421,6 +434,8 @@ function Invoke-Phase2_PreFlightChecks {
         $allChecksPassed = $false
     } else {
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
+        Write-Styled -Type SubStep -Message "Actualizando repositorios de Winget..."
+        Invoke-NativeCommand -Executable "winget" -ArgumentList "source update" -Activity "Actualizando repositorios de Winget" | Out-Null
     }
 
     Write-Styled -Message "Verificando módulo de PowerShell para Winget..." -NoNewline
