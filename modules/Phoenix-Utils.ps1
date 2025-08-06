@@ -335,7 +335,8 @@ function Invoke-PostInstallConfiguration {
         return
     }
 
-    $sourceConfigDir = Join-Path (Join-Path $PSScriptRoot "assets/configs") $Package.installId
+    $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    $sourceConfigDir = Join-Path $projectRoot "assets/configs" $Package.installId
 
     if (-not (Test-Path $sourceConfigDir)) {
         Write-Styled -Type Warn -Message "No se encontró un directorio de configuración de origen para '$friendlyName' en '$sourceConfigDir'."
@@ -390,7 +391,7 @@ function Invoke-PostInstallConfiguration {
         }
 
         Write-Styled -Type Success -Message "La configuración para '$friendlyName' se ha aplicado correctamente."
-
+        Pause-And-Return
     } catch {
         Write-Styled -Type Error -Message "Ocurrió un error al aplicar la configuración para '$friendlyName'."
         Write-Styled -Type Log -Message "Ruta de origen: $sourceConfigDir"
