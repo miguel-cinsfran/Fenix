@@ -3,7 +3,15 @@
     "items": [
         { "installId": "Microsoft.PowerShell", "name": "PowerShell Core" },
         { "installId": "CoreyButler.NVMforWindows", "name": "NVM for Windows" },
-        { "installId": "Microsoft.VisualStudioCode", "name": "Visual Studio Code", "postInstallConfig": true },
+        {
+            "installId": "Microsoft.VisualStudioCode",
+            "name": "Visual Studio Code",
+            "postInstallConfig": true,
+            "configPaths": [
+                "$env:APPDATA/Code/User",
+                "$env:ProgramFiles/Microsoft VS Code/resources/app/user"
+            ]
+        },
         { "installId": "9NKSQGP7F2NH", "checkName": "WhatsApp", "name": "WhatsApp", "source": "msstore" },
         { "installId": "Telegram.Unigram", "name": "Telegram (Unigram)" },
         { "installId": "Zoom.Zoom", "name": "Zoom" }

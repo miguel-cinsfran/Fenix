@@ -33,6 +33,13 @@
             "postInstallConfig": {
                 "description": "Opcional. Si es verdadero, indica que el paquete tiene una configuración personalizada para aplicar post-instalación.",
                 "type": "boolean"
+            },
+            "configPaths": {
+                "description": "Opcional. Un array de rutas de destino posibles para los archivos de configuración. Se usará la primera que se encuentre.",
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
             }
         },
         "required": [
