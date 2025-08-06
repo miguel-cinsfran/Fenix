@@ -336,7 +336,7 @@ function Invoke-PostInstallConfiguration {
     }
 
     $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-    $sourceConfigDir = Join-Path $projectRoot "assets/configs" $Package.installId
+    $sourceConfigDir = Join-Path (Join-Path $projectRoot "assets/configs") $Package.installId
 
     if (-not (Test-Path $sourceConfigDir)) {
         Write-Styled -Type Warn -Message "No se encontró un directorio de configuración de origen para '$friendlyName' en '$sourceConfigDir'."
