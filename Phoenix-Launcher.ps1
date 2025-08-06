@@ -46,6 +46,10 @@ try {
     exit
 }
 
+# SECCIÓN 3.1: VERIFICACIÓN DE CODIFICACIÓN DE FICHEROS
+Invoke-EnsureFileEncoding -BasePath $PSScriptRoot -Extensions @("*.ps1", "*.json", "*.md", "*.txt")
+Write-Host # Add a newline for spacing
+
 # SECCIÓN 3.5: VERIFICACIÓN INICIAL DE INTERNET
 if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
     Write-Styled -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."

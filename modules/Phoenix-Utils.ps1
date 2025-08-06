@@ -397,3 +397,45 @@ function Invoke-PostInstallConfiguration {
         Pause-And-Return
     }
 }
+
+#region Environment Functions
+function Invoke-EnsureFileEncoding {
+    param(
+        [string]$BasePath,
+        [string[]]$Extensions
+    )
+    Write-Styled -Type Step -Message "Verificando la codificación de los ficheros del script..."
+
+    $files = Get-ChildItem -Path $BasePath -Recurse -Include $Extensions -File
+    $utf8Bom = [byte[]](0xEF, 0xBB, 0xBF)
+    $convertedCount = 0
+
+    foreach ($file in $files) {
+        try {
+            $fileBytes = Get-Content -Path $file.FullName -Encoding Byte -TotalCount 3
+
+            $hasBom = $false
+            if ($fileBytes.Length -ge 3) {
+                if ($fileBytes[0] -eq $utf8Bom[0] -and $fileBytes[1] -eq $utf8Bom[1] -and $fileBytes[2] -eq $utf8Bom[2]) {
+                    $hasBom = $true
+                }
+            }
+
+            if (-not $hasBom) {
+                Write-Styled -Type SubStep -Message "Convirtiendo a UTF-8 con BOM: $($file.Name)"
+                $content = Get-Content -Path $file.FullName
+                Set-Content -Path $file.FullName -Value $content -Encoding UTF8 -Force
+                $convertedCount++
+            }
+        } catch {
+            Write-Styled -Type Warn -Message "No se pudo procesar el fichero '$($file.Name)'. Error: $($_.Exception.Message)"
+        }
+    }
+
+    if ($convertedCount -gt 0) {
+        Write-Styled -Type Success -Message "Conversión de codificación completada para $convertedCount fichero(s)."
+    } else {
+        Write-Styled -Type Success -Message "Todos los ficheros ya tienen la codificación correcta (UTF-8 con BOM)."
+    }
+}
+#endregion
