@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de utilidades compartidas para el motor de aprovisionamiento Fénix.
 .DESCRIPTION

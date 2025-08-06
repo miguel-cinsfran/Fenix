@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 2 para la instalación de software desde manifiestos.
 .DESCRIPTION

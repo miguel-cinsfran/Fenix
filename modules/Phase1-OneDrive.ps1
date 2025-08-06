@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 1 para la erradicación de OneDrive.
 .DESCRIPTION

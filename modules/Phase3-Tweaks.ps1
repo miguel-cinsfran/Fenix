@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 3 para la aplicación de optimizaciones y configuraciones del sistema.
 .DESCRIPTION

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Orquestador central para el motor de aprovisionamiento Fénix.
 .DESCRIPTION
