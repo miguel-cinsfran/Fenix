@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 4 para la instalación y administración de WSL2.
 .DESCRIPTION
