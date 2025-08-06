@@ -80,6 +80,63 @@ function _Disable-WindowsFeature {
 #endregion
 
 #region Menu Functions
+
+function _Get-AvailableWslDistros {
+    Write-Styled -Type SubStep -Message "Consultando la lista de distribuciones disponibles en línea..."
+    $onlineResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --online" -Activity "Buscando distribuciones disponibles"
+
+    if (-not $onlineResult.Success) {
+        Write-Styled -Type Error -Message "No se pudo obtener la lista de distribuciones disponibles desde Microsoft Store."
+        Write-Styled -Type Log -Message "Error: $($onlineResult.Output)"
+        return $null # Return null on command failure
+    }
+
+    # Handle cases where the command succeeds but returns a 'no distros' message
+    if ($onlineResult.Output -match "No hay distribuciones disponibles" -or $onlineResult.Output -match "There are no distributions available") {
+        # This is not an error, so we return an empty array.
+        return @()
+    }
+
+    $lines = $onlineResult.Output -split '\r?\n'
+    $distros = @()
+    $parsing = $false
+
+    foreach ($line in $lines) {
+        # Start parsing after the header line. This is more robust than a fixed index or relying on clean output.
+        if (-not $parsing -and $line -match "^\s*NAME\s+FRIENDLY NAME\s*") {
+            $parsing = $true
+            continue # Skip the header line itself
+        }
+
+        if ($parsing) {
+            # Skip the separator line '---'
+            if ($line -match '^-{5,}') { continue }
+
+            $trimmedLine = $line.Trim()
+
+            # Stop parsing if we hit a blank line after starting
+            if ([string]::IsNullOrWhiteSpace($trimmedLine)) { break }
+
+            # This regex captures the first word as NAME and the rest as FRIENDLY NAME, requiring at least two spaces separator
+            $match = $trimmedLine -match '^([^\s]+)\s{2,}(.*)$'
+            if ($match) {
+                $distros += [PSCustomObject]@{
+                    Name         = $matches[1].Trim()
+                    FriendlyName = $matches[2].Trim()
+                }
+            }
+        }
+    }
+
+    if ($distros.Count -eq 0) {
+        Write-Styled -Type Warn -Message "No se pudieron analizar distribuciones de la salida de WSL. Es posible que no haya distribuciones nuevas o que el formato de salida haya cambiado."
+        Write-Styled -Type Log -Message "Salida recibida de WSL:"
+        $onlineResult.Output.Split([System.Environment]::NewLine) | ForEach-Object { Write-Styled -Type Log -Message $_ }
+    }
+
+    return $distros
+}
+
 function Invoke-WslUpdateCheck {
     Show-Header -Title "Buscar Actualizaciones de WSL" -NoClear
 
@@ -119,7 +176,16 @@ function Show-InstalledDistrosMenu {
         Show-Header -Title "Administrar Distribuciones Instaladas" -NoClear
 
         $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --verbose" -Activity "Listando distribuciones instaladas"
-        if (-not $listResult.Success -or $listResult.Output -match "No hay distribuciones instaladas") {
+
+        if (-not $listResult.Success) {
+            Write-Styled -Type Error -Message "No se pudo obtener la lista de distribuciones instaladas."
+            Write-Styled -Type Log -Message "Error: $($listResult.Output)"
+            Pause-And-Return
+            return
+        }
+
+        # Check for known "no distros" messages in the output.
+        if ($listResult.Output -match "No hay distribuciones instaladas" -or $listResult.Output -match "There are no installed distributions") {
             Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux instaladas."
             Pause-And-Return
             return
@@ -212,31 +278,17 @@ Seleccione una acción para '$($selectedDistro.Name)':
 function Show-AvailableDistros {
     Show-Header -Title "Instalar Nueva Distribución" -NoClear
 
-    $onlineResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --online" -Activity "Buscando distribuciones disponibles"
-    if (-not $onlineResult.Success) {
-        Write-Styled -Type Error -Message "No se pudo obtener la lista de distribuciones disponibles."
+    # Use the new helper function to get available distros. This encapsulates the parsing logic.
+    $availableDistros = _Get-AvailableWslDistros
+
+    # Handle potential failure from the helper function ($null return).
+    if ($null -eq $availableDistros) {
+        # Error message was already printed by the helper. Just wait for user input.
         Pause-And-Return
         return
     }
 
-    $lines = $onlineResult.Output -split '\r?\n'
-    $startIndex = 0
-    for ($i = 0; $i -lt $lines.Length; $i++) {
-        if ($lines[$i] -match "^\s*NAME\s+FRIENDLY NAME\s*$") { $startIndex = $i + 2; break }
-    }
-
-    $availableDistros = foreach ($line in $lines | Select-Object -Skip $startIndex) {
-        if ($line.Trim() -and $line -notmatch '---') {
-            $match = $line -match '^\s*([^\s]+)\s+(.+?)\s*$'
-            if ($match) {
-                [PSCustomObject]@{
-                    Name         = $matches[1].Trim()
-                    FriendlyName = $matches[2].Trim()
-                }
-            }
-        }
-    }
-
+    # Get the list of already installed distros to filter them out.
     $installedResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones instaladas"
     $installedNames = @()
     if ($installedResult.Success) {
@@ -246,14 +298,17 @@ function Show-AvailableDistros {
         }
     }
 
+    # Filter the list of available distros against those already installed.
     $distrosToDisplay = $availableDistros | Where-Object { $installedNames -notcontains $_.Name -and $installedNames -notcontains $_.FriendlyName }
 
+    # Handle the case where there's nothing new to install.
     if ($distrosToDisplay.Count -eq 0) {
-        Write-Styled -Type Info -Message "No hay nuevas distribuciones para instalar, o todas las disponibles ya están instaladas."
+        Write-Styled -Type Info -Message "No hay nuevas distribuciones para instalar. Es posible que todas las disponibles ya estén instaladas."
         Pause-And-Return
         return
     }
 
+    # Display menu and handle installation (this part remains the same).
     $menuItems = @()
     foreach ($distro in $distrosToDisplay) {
         $menuItems += @{ Description = $distro.FriendlyName; DistroData = $distro }
