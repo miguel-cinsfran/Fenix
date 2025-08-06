@@ -12,7 +12,7 @@
 function _Enable-WindowsFeature {
     param([string]$FeatureName)
     Write-Styled -Type SubStep -Message "Habilitando la característica de Windows: '$FeatureName'..."
-    $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /Enable-Feature /FeatureName:$FeatureName /All /NoRestart" -Activity "Habilitando $FeatureName"
+    $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /Enable-Feature /FeatureName:$FeatureName /All /NoRestart" -Activity "Habilitando $FeatureName" -ProgressRegex '\s(\d+)\s*%'
     if (-not $result.Success) {
         throw "DISM falló al intentar habilitar '$FeatureName'. Salida: $($result.Output)"
     }
@@ -28,7 +28,7 @@ function _Handle-Distro-Installation {
         Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux instaladas."
         Write-Styled -Type Consent -Message "El script puede intentar instalar la distribución 'Ubuntu' por defecto."
         if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea continuar con la instalación de Ubuntu?") -eq 'S') {
-            $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution Ubuntu" -FailureStrings "Error" -Activity "Instalando Ubuntu"
+            $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution Ubuntu" -FailureStrings "Error" -Activity "Instalando Ubuntu" -IdleTimeoutEnabled:$false -ProgressRegex '\s(\d+)\s*%'
             if (-not $installResult.Success) {
                 throw "Error al instalar Ubuntu: $($installResult.Output)"
             }
@@ -52,7 +52,7 @@ function _Handle-Distro-Installation {
             Write-Host ($onlineListResult.Output)
             $distroToInstall = Read-Host "Escriba el nombre de la distribución que desea instalar (o presione Enter para cancelar)"
             if ($distroToInstall) {
-                $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall"
+                $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall" -IdleTimeoutEnabled:$false -ProgressRegex '\s(\d+)\s*%'
                 if (-not $installResult.Success) {
                     throw "Error al instalar ${distroToInstall}: $($installResult.Output)"
                 }
@@ -89,14 +89,14 @@ function Invoke-Phase4_WSL {
                     Invoke-RestartPrompt
                 } else {
                     Write-Styled -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos."
-                    Pause-And-Return -Message "`nRevise el error de instalación de WSL. Presione Enter para continuar."
+                    Pause-And-Return
                 }
                 return
             }
 
             Write-Styled -Type Success -Message "Todos los prerrequisitos de Windows ya están habilitados."
             Write-Styled -Type Step -Message "Procediendo con la instalación de WSL y la distribución de Ubuntu por defecto..."
-            $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install" -FailureStrings "Error" -Activity "Instalando WSL y Ubuntu"
+            $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install" -FailureStrings "Error" -Activity "Instalando WSL y Ubuntu" -IdleTimeoutEnabled:$false -ProgressRegex '\s(\d+)\s*%'
             if (-not $installResult.Success) {
                 throw "La instalación de WSL falló. Salida: $($installResult.Output)"
             }
@@ -114,5 +114,5 @@ function Invoke-Phase4_WSL {
     } catch {
         Write-Styled -Type Error -Message "Error fatal en la instalación de WSL: $($_.Exception.Message)"
     }
-    Pause-And-Return -Message "`nPresione Enter para volver al menú principal."
+    Pause-And-Return
 }

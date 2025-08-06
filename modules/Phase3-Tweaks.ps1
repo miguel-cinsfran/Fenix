@@ -157,7 +157,7 @@ function Invoke-Phase3_Tweaks {
     param([string]$CatalogPath)
     if (-not (Test-Path $CatalogPath)) {
         Write-Styled -Type Error -Message "No se encontró el catálogo de tweaks en '$CatalogPath'."
-        Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para volver al menú."
+        Pause-And-Return
         return
     }
     $tweaks = (Get-Content -Raw -Path $CatalogPath -Encoding UTF8 | ConvertFrom-Json).items
@@ -239,6 +239,6 @@ function Invoke-Phase3_Tweaks {
                 }
             }
         }
-        if ($actionTaken) { Pause-And-Return -Message "`nAjustes aplicados. Presione Enter para volver al menú." }
+        if ($actionTaken) { Pause-And-Return }
     }
 }
