@@ -329,7 +329,13 @@ function Invoke-PostInstallConfiguration {
     )
 
     $friendlyName = if ($Package.name) { $Package.name } else { $Package.installId }
-    $sourceConfigDir = Join-Path $PSScriptRoot "assets/configs" $Package.installId
+
+    if ([string]::IsNullOrWhiteSpace($Package.installId)) {
+        Write-Styled -Type Error -Message "El paquete '$friendlyName' tiene un 'installId' inválido y no se puede procesar la configuración."
+        return
+    }
+
+    $sourceConfigDir = Join-Path (Join-Path $PSScriptRoot "assets/configs") $Package.installId
 
     if (-not (Test-Path $sourceConfigDir)) {
         Write-Styled -Type Warn -Message "No se encontró un directorio de configuración de origen para '$friendlyName' en '$sourceConfigDir'."
