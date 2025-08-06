@@ -22,11 +22,6 @@ $Global:Theme = @{
     Consent   = "Cyan"
     Info      = "Gray"
     Log       = "DarkGray"
-    Control   = @{
-        Up        = "$([char]27)[A"
-        ClearLine = "$([char]27)[2K"
-        ToLineStart = "`r"
-    }
 }
 
 # FUNCIONES DE UI
@@ -123,14 +118,14 @@ function Invoke-MenuPrompt {
                 return $input
             }
 
-            # La manipulación del cursor con ANSI es frágil. Un mensaje de error simple es más seguro.
-            Write-Host "`n [ERROR] Opción no válida. Por favor, intente de nuevo." -ForegroundColor $Global:Theme.Error
-            Start-Sleep -Seconds 2
-
-            # Limpiar las líneas de error y el prompt anterior para la siguiente iteración
-            $up = $Global:Theme.Control.Up
-            $clear = $Global:Theme.Control.ClearLine
-            Write-Host "${up}${clear}${up}${clear}" -NoNewline
+            # En lugar de manipular el cursor, simplemente se muestra un error. El bucle
+            # principal que llama al menú (ej. en el Launcher) se encargará de redibujar
+            # la pantalla, o el siguiente prompt aparecerá en una nueva línea.
+            Write-Styled -Type Error -Message "Opción no válida. Por favor, inténtelo de nuevo."
+            # Una pequeña pausa para que el usuario pueda leer el error.
+            Start-Sleep -Seconds 1
+            # Se necesita una línea en blanco para separar el error del siguiente prompt
+            Write-Host
         }
     } catch [System.Management.Automation.PipelineStoppedException] {
         # Capturada por el manejador de Ctrl+C del lanzador, simplemente re-lanzar.
