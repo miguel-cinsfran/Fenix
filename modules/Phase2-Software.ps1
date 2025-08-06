@@ -317,17 +317,19 @@ function Invoke-SoftwareManagerUI {
     while (-not $exitManagerUI) {
         Show-Header -Title "FASE 2: Administrador de Paquetes (${Manager})" -NoClear
 
-        $cacheVarName = "script:${Manager}StatusCache"
-        if ($null -eq (Get-Variable -Name $cacheVarName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Value)) {
+        # Determinar qué caché usar y obtener su valor
+        $packageStatusList = if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache } else { $script:wingetStatusCache }
+
+        if ($null -eq $packageStatusList) {
             Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para ${Manager} (puede tardar)..."
-            $statusList = if ($Manager -eq 'Chocolatey') {
+            $packageStatusList = if ($Manager -eq 'Chocolatey') {
                 _Get-ChocolateyPackageStatus -CatalogPackages $catalogPackages
             } else {
                 _Get-WingetPackageStatus -CatalogPackages $catalogPackages
             }
-            Set-Variable -Name $cacheVarName -Value $statusList
+            # Guardar el resultado en la caché correcta
+            if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $packageStatusList } else { $script:wingetStatusCache = $packageStatusList }
         }
-        $packageStatusList = Get-Variable -Name $cacheVarName | Select-Object -ExpandProperty Value
 
         if ($null -eq $packageStatusList) {
             Write-Styled -Type Error -Message "No se pudo continuar debido a un error al obtener el estado de los paquetes."
@@ -363,7 +365,8 @@ function Invoke-SoftwareManagerUI {
                                 _Install-Package -Manager $Manager -Item $item
                             }
                         }
-                        Set-Variable -Name $cacheVarName -Value $null # Invalidar caché después de la acción
+                        # Invalidar la caché correcta
+                        if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $null } else { $script:wingetStatusCache = $null }
                     } catch {
                         Write-Styled -Type Error -Message "Ocurrió un error durante el procesamiento masivo."
                         Pause-And-Return
@@ -372,7 +375,10 @@ function Invoke-SoftwareManagerUI {
                     Write-Styled -Type Info -Message "No hay paquetes para instalar o actualizar."; Start-Sleep -Seconds 2
                 }
             }
-            'R' { Set-Variable -Name $cacheVarName -Value $null; continue }
+            'R' {
+                if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $null } else { $script:wingetStatusCache = $null }
+                continue
+            }
             '0' { $exitManagerUI = $true }
             default { # Es un número
                 $packageIndex = [int]$choice - 1
