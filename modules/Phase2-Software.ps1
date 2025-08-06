@@ -41,7 +41,7 @@ function _Get-ChocolateyPackageStatus {
     # Paso 1: Obtener todos los paquetes instalados y desactualizados en dos llamadas eficientes.
     Write-Styled -Type Info -Message "Consultando paquetes de Chocolatey instalados..."
     # Se añade '-y' para aceptar automáticamente cualquier licencia o prompt que pueda causar un cuelgue.
-    $listResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "list --limit-output -y" -Activity "Consultando paquetes de Chocolatey"
+    $listResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "list --limit-output -y" -Activity "Consultando paquetes de Chocolatey" -IdleTimeoutEnabled $false
     if (-not $listResult.Success) {
         Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados con Chocolatey."
         return $null
@@ -52,7 +52,7 @@ function _Get-ChocolateyPackageStatus {
     }
 
     Write-Styled -Type Info -Message "Buscando actualizaciones para paquetes de Chocolatey..."
-    $outdatedResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "outdated --limit-output -y" -Activity "Buscando actualizaciones de Chocolatey"
+    $outdatedResult = Invoke-NativeCommand -Executable "choco" -ArgumentList "outdated --limit-output -y" -Activity "Buscando actualizaciones de Chocolatey" -IdleTimeoutEnabled $false
     $outdatedPackages = @{}
     if ($outdatedResult.Success) {
         $outdatedResult.Output -split "`n" | ForEach-Object {

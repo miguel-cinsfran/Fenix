@@ -52,7 +52,7 @@ function Invoke-StandardMenu {
     param(
         [string]$Title,
         [array]$MenuItems,
-        [orderedhashtable]$ActionOptions,
+        $ActionOptions,
         [string]$PromptMessage = "Seleccione una opción"
     )
     Show-Header -Title $Title
@@ -142,57 +142,66 @@ function Invoke-JobWithTimeout {
     param(
         [scriptblock]$ScriptBlock,
         [string]$Activity = "Ejecutando operación en segundo plano...",
-        [int]$TimeoutSeconds = 3600, # Un timeout general para evitar que el script se cuelgue indefinidamente
+        [int]$TimeoutSeconds = 3600,
         [boolean]$IdleTimeoutEnabled = $true,
-        [int]$IdleTimeoutSeconds = 300 # 5 minutos por defecto, como se observó
+        [int]$IdleTimeoutSeconds = 300
     )
 
     $job = Start-Job -ScriptBlock $ScriptBlock
     $overallTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $overallTimeout = New-TimeSpan -Seconds $TimeoutSeconds
-
     $idleTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $idleTimeout = New-TimeSpan -Seconds $IdleTimeoutSeconds
 
-    $lastOutputCount = 0
+    $outputBuffer = New-Object System.Text.StringBuilder
+    $lastProgressPercent = -1
 
     Write-Styled -Type Info -Message "Iniciando tarea: $Activity"
 
     while ($job.State -eq 'Running') {
-        if ($overallTimer.Elapsed -gt $overallTimeout) {
-            Stop-Job $job
-            throw "La operación '$Activity' excedió el tiempo límite total de $TimeoutSeconds segundos."
+        # --- Timeouts ---
+        if ($overallTimer.Elapsed -gt $overallTimeout) { Stop-Job $job; throw "La operación '$Activity' excedió el tiempo límite total de $TimeoutSeconds segundos." }
+        if ($IdleTimeoutEnabled -and $idleTimer.Elapsed -gt $idleTimeout) { Stop-Job $job; throw "La operación '$Activity' no mostró actividad por más de $IdleTimeoutSeconds segundos y fue terminada." }
+
+        # --- Recibir y procesar nueva salida ---
+        $newData = $job.ChildJobs[0].Output.ReadAll()
+        if ($newData) {
+            $idleTimer.Restart() # Reiniciar temporizador de inactividad
+            [void]$outputBuffer.Append($newData -join [System.Environment]::NewLine)
+
+            # --- Lógica de parseo de progreso ---
+            # Buscar la última línea que contenga un porcentaje
+            $lastLine = ($newData | Where-Object { $_ -match '\d+\s*%' } | Select-Object -Last 1)
+            if ($lastLine) {
+                # Extraer el primer número que parece un porcentaje
+                if ($lastLine -match '(\d+)\s*%') {
+                    $percent = [int]$matches[1]
+                    if ($percent -ne $lastProgressPercent) {
+                        $lastProgressPercent = $percent
+                        # Asegurar que el estado no sea muy largo para la barra de progreso
+                        $statusMessage = "Progreso: ${percent}% | Tiempo: $($overallTimer.Elapsed.ToString('hh\:mm\:ss'))"
+                        Write-Progress -Activity $Activity -Status $statusMessage -PercentComplete $percent
+                    }
+                }
+            }
         }
 
-        if ($IdleTimeoutEnabled -and $idleTimer.Elapsed -gt $idleTimeout) {
-            Stop-Job $job
-            throw "La operación '$Activity' no mostró actividad por más de $IdleTimeoutSeconds segundos y fue terminada."
+        # --- Actualización de la barra de progreso (si no hay porcentaje) ---
+        if ($lastProgressPercent -lt 0) {
+            $status = "Tiempo transcurrido: $($overallTimer.Elapsed.ToString('hh\:mm\:ss'))"
+            if ($IdleTimeoutEnabled) {
+                $status += " | Tiempo de inactividad restante: $(($idleTimeout - $idleTimer.Elapsed).ToString('mm\:ss'))"
+            }
+            Write-Progress -Activity $Activity -Status $status
         }
 
-        # Comprobar si hay nueva salida para reiniciar el temporizador de inactividad
-        $currentOutput = $job.ChildJobs[0].Output
-        if ($currentOutput.Count -gt $lastOutputCount) {
-            $idleTimer.Restart()
-            $lastOutputCount = $currentOutput.Count
-        }
-
-        $status = "Tiempo transcurrido: $($overallTimer.Elapsed.ToString('hh\:mm\:ss'))"
-        if ($IdleTimeoutEnabled) {
-            $status += " | Tiempo de inactividad restante: $(($idleTimeout - $idleTimer.Elapsed).ToString('mm\:ss'))"
-        }
-
-        Write-Progress -Activity $Activity -Status $status
-        Start-Sleep -Seconds 1
+        Start-Sleep -Milliseconds 250
     }
 
     Write-Progress -Activity $Activity -Completed
 
-    $result = [PSCustomObject]@{
-        Success = $false
-        Output = @()
-        Error = ""
-    }
-
+    # --- Recopilar resultados finales ---
+    $result = [PSCustomObject]@{ Success = $false; Output = @(); Error = "" }
     if ($job.State -eq 'Failed') {
         $errorRecord = $job.ChildJobs[0].Error.ReadAll() | Select-Object -First 1
         $result.Error = $errorRecord.Exception.Message
@@ -200,7 +209,12 @@ function Invoke-JobWithTimeout {
         $result.Success = $true
     }
 
-    $result.Output = Receive-Job $job
+    # Añadir cualquier salida que no se haya capturado en el bucle
+    $remainingOutput = Receive-Job $job
+    if ($remainingOutput) {
+        [void]$outputBuffer.Append($remainingOutput -join [System.Environment]::NewLine)
+    }
+    $result.Output = $outputBuffer.ToString().Split([System.Environment]::NewLine)
     Remove-Job $job -Force
     return $result
 }
