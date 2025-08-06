@@ -16,6 +16,7 @@ function _Invoke-CleanupTask-SimpleCommand {
     $result = Invoke-JobWithTimeout -ScriptBlock ([scriptblock]::Create($Task.details.command)) -Activity $Task.description -TimeoutSeconds 1800
     if ($result.Success) {
         Write-Styled -Type Success -Message "Tarea '$($Task.description)' completada."
+        if ($Task.rebootRequired) { $global:RebootIsPending = $true }
     } else {
         Write-Styled -Type Error -Message "La tarea '$($Task.description)' falló: $($result.Error)"
     }
@@ -113,6 +114,7 @@ function _Invoke-CleanupTask-WindowsUpdateCleanup {
         $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /English /Cleanup-Image /StartComponentCleanup /ResetBase" -FailureStrings "Error:" -Activity "Limpiando archivos de Windows Update"
         if ($result.Success) {
             Write-Styled -Type Success -Message "Tarea '$($Task.description)' completada."
+            if ($Task.rebootRequired) { $global:RebootIsPending = $true }
         } else {
             Write-Styled -Type Error -Message "La tarea '$($Task.description)' falló."
         }

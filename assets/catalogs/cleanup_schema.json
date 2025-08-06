@@ -27,6 +27,10 @@
             "details": {
                 "description": "Un objeto que contiene los parámetros específicos para la tarea.",
                 "type": "object"
+            },
+            "rebootRequired": {
+                "description": "Opcional. Si es verdadero, se recomienda reiniciar el sistema después de la operación.",
+                "type": "boolean"
             }
         },
         "required": [

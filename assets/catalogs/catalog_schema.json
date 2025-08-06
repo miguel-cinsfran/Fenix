@@ -25,6 +25,10 @@
             "special_params": {
                 "description": "Parámetros de instalación especiales, solo aplicable a Chocolatey.",
                 "type": "string"
+            },
+            "rebootRequired": {
+                "description": "Opcional. Si es verdadero, se recomienda reiniciar el sistema después de la operación.",
+                "type": "boolean"
             }
         },
         "required": [

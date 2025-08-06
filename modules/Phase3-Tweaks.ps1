@@ -149,6 +149,7 @@ function _Execute-TweakAction {
     }
     
     if ($needsExplorerRestart) { Start-Process explorer.exe | Out-Null }
+    if ($Tweak.rebootRequired) { $global:RebootIsPending = $true }
     return $success
 }
 

@@ -54,6 +54,7 @@ if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
 }
 
 # SECCIÓN 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
+$global:RebootIsPending = $false
 Clear-Host
 Show-Header -Title "Motor de Aprovisionamiento Fénix v3.0" -NoClear
 Write-Styled -Type Info -Message "Este script automatiza la configuración y aprovisionamiento de un entorno de desarrollo en Windows."
@@ -111,6 +112,10 @@ try {
                 $chosenIndex = [int]$choice - 1
                 $chosenOption = $mainMenuOptions[$chosenIndex]
                 & $chosenOption.Action
+                if ($global:RebootIsPending) {
+                    Invoke-RestartPrompt
+                    $global:RebootIsPending = $false
+                }
             }
         }
     }

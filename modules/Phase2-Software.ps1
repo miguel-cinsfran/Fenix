@@ -99,30 +99,15 @@ function _Get-ChocolateyPackageStatus {
     return $packageStatusList
 }
 
-function _Get-WingetPackageStatus {
-    param([array]$CatalogPackages)
-
-    if ($Global:UseWingetCli -or -not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
-        Write-Styled -Type Warn -Message "Usando método de reserva para Winget. La información puede ser menos precisa."
-        return _Get-WingetPackageStatus_Cli -CatalogPackages $CatalogPackages
-    }
-    try {
-        Import-Module Microsoft.WinGet.Client -ErrorAction Stop
-    } catch {
-        Write-Styled -Type Error -Message "No se pudo importar el módulo 'Microsoft.WinGet.Client'."; Write-Styled -Type Warn -Message "Cambiando a método de reserva para Winget."
-        return _Get-WingetPackageStatus_Cli -CatalogPackages $CatalogPackages
-    }
-
-    Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget a través del módulo. Esto puede tardar un momento..."
-    try {
-        $allPackages = Get-WinGetPackage
-        # Crear mapas duales por ID y por Nombre para manejar todos los casos del catálogo.
-        $packagesById = $allPackages | Group-Object -Property Id -AsHashTable -AsString
-        $packagesByName = $allPackages | Group-Object -Property Name -AsHashTable -AsString
-    } catch {
-        Write-Styled -Type Error -Message "Fallo crítico al obtener la lista de paquetes de Winget: $($_.Exception.Message)"; return $null
-    }
-
+# Lógica de procesamiento de catálogo compartida para Winget
+function _Process-WingetCatalog {
+    param(
+        [array]$CatalogPackages,
+        [hashtable]$InstalledMap,
+        [hashtable]$UpgradableMap,
+        [hashtable]$InstalledMapByName,
+        [hashtable]$UpgradableMapByName
+    )
     $packageStatusList = @()
     for ($i = 0; $i -lt $CatalogPackages.Count; $i++) {
         $pkg = $CatalogPackages[$i]; $installId = $pkg.installId
@@ -131,22 +116,18 @@ function _Get-WingetPackageStatus {
 
         $status = "No Instalado"; $versionInfo = ""; $isUpgradable = $false
 
-        # Decidir qué mapa y qué clave usar (checkName o installId)
         $useNameCheck = -not [string]::IsNullOrEmpty($pkg.checkName)
         $key = if ($useNameCheck) { $pkg.checkName } else { $installId }
-        $packageMap = if ($useNameCheck) { $packagesByName } else { $packagesById }
+        $currentInstalledMap = if ($useNameCheck) { $InstalledMapByName } else { $InstalledMap }
+        $currentUpgradableMap = if ($useNameCheck) { $UpgradableMapByName } else { $UpgradableMap }
 
-        if ($packageMap.ContainsKey($key)) {
-            $wingetPackage = $packageMap[$key]
-            if ($wingetPackage.InstalledVersion) {
-                $status = "Instalado"
-                $versionInfo = "(v$($wingetPackage.InstalledVersion))"
-                if ($wingetPackage.AvailableVersion -and ($wingetPackage.InstalledVersion -ne $wingetPackage.AvailableVersion)) {
-                    $status = "Actualización Disponible"
-                    $versionInfo = "(v$($wingetPackage.InstalledVersion) -> v$($wingetPackage.AvailableVersion))"
-                    $isUpgradable = $true
-                }
-            }
+        if ($currentUpgradableMap.ContainsKey($key)) {
+            $status = "Actualización Disponible"
+            $versionInfo = "(v$($currentUpgradableMap[$key].Current) -> v$($currentUpgradableMap[$key].Available))"
+            $isUpgradable = $true
+        } elseif ($currentInstalledMap.ContainsKey($key)) {
+            $status = "Instalado"
+            $versionInfo = "(v$($currentInstalledMap[$key]))"
         }
 
         $packageStatusList += [PSCustomObject]@{
@@ -158,27 +139,56 @@ function _Get-WingetPackageStatus {
     return $packageStatusList
 }
 
-# Fallback function using the old CLI parsing method
+function _Get-WingetPackageStatus {
+    param([array]$CatalogPackages)
+
+    if ($Global:UseWingetCli -or -not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
+        return _Get-WingetPackageStatus_Cli -CatalogPackages $CatalogPackages
+    }
+    try {
+        Import-Module Microsoft.WinGet.Client -ErrorAction Stop
+    } catch {
+        Write-Styled -Type Error -Message "No se pudo importar el módulo 'Microsoft.WinGet.Client'."; Write-Styled -Type Warn -Message "Cambiando a método de reserva para Winget."
+        return _Get-WingetPackageStatus_Cli -CatalogPackages $CatalogPackages
+    }
+
+    Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget a través del módulo..."
+    try {
+        $allPackages = Get-WinGetPackage
+        $installedById = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Id -AsHashTable -AsString
+        $installedByName = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Name -AsHashTable -AsString
+
+        $upgradableById = $allPackages | Where-Object { $_.AvailableVersion } | Group-Object -Property Id -AsHashTable -AsString
+        $upgradableByName = $allPackages | Where-Object { $_.AvailableVersion } | Group-Object -Property Name -AsHashTable -AsString
+
+        # Para los mapas de versiones, necesitamos extraer la propiedad correcta
+        $installedVersionsById = @{}; $installedById.GetEnumerator() | ForEach-Object { $installedVersionsById[$_.Name] = $_.Value[0].InstalledVersion }
+        $installedVersionsByName = @{}; $installedByName.GetEnumerator() | ForEach-Object { $installedVersionsByName[$_.Name] = $_.Value[0].InstalledVersion }
+        $upgradableVersionsById = @{}; $upgradableById.GetEnumerator() | ForEach-Object { $upgradableVersionsById[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } }
+        $upgradableVersionsByName = @{}; $upgradableByName.GetEnumerator() | ForEach-Object { $upgradableVersionsByName[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } }
+
+    } catch {
+        Write-Styled -Type Error -Message "Fallo crítico al obtener la lista de paquetes de Winget: $($_.Exception.Message)"; return $null
+    }
+
+    return _Process-WingetCatalog -CatalogPackages $CatalogPackages -InstalledMap $installedVersionsById -UpgradableMap $upgradableVersionsById -InstalledMapByName $installedVersionsByName -UpgradableMapByName $upgradableVersionsByName
+}
+
 function _Get-WingetPackageStatus_Cli {
     param([array]$CatalogPackages)
 
-    Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget (CLI). Esto puede tardar un momento..."
+    Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget (CLI)..."
 
     $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --accept-source-agreements --disable-interactivity" -Activity "Listando todos los paquetes de Winget"
     $upgradeResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "upgrade --include-unknown --accept-source-agreements --disable-interactivity" -Activity "Buscando todas las actualizaciones de Winget"
 
-    # Crear mapas duales: uno por ID y otro por Nombre, para manejar todos los casos del catálogo.
     $installedById = @{}; $installedByName = @{}
     if ($listResult.Success) {
         $listResult.Output -split "`n" | Select-Object -Skip 2 | ForEach-Object {
             $parts = $_.Trim() -split '\s{2,}' | Where-Object { $_ }
             if ($parts.Count -ge 3) {
-                # El nombre puede contener espacios, por lo que es todo excepto los dos últimos elementos.
-                $name = ($parts[0..($parts.Count - 3)] -join ' ').Trim()
-                $id = $parts[-2].Trim()
-                $version = $parts[-1].Trim()
-                if ($id) { $installedById[$id] = $version }
-                if ($name) { $installedByName[$name] = $version }
+                $name = ($parts[0..($parts.Count - 3)] -join ' ').Trim(); $id = $parts[-2].Trim(); $version = $parts[-1].Trim()
+                if ($id) { $installedById[$id] = $version }; if ($name) { $installedByName[$name] = $version }
             }
         }
     }
@@ -188,48 +198,14 @@ function _Get-WingetPackageStatus_Cli {
         $upgradeResult.Output -split "`n" | Select-Object -Skip 2 | ForEach-Object {
             $parts = $_.Trim() -split '\s{2,}' | Where-Object { $_ }
             if ($parts.Count -ge 4) {
-                $name = ($parts[0..($parts.Count - 4)] -join ' ').Trim()
-                $id = $parts[-3].Trim()
-                $currentVersion = $parts[-2].Trim()
-                $availableVersion = $parts[-1].Trim()
+                $name = ($parts[0..($parts.Count - 4)] -join ' ').Trim(); $id = $parts[-3].Trim()
+                $currentVersion = $parts[-2].Trim(); $availableVersion = $parts[-1].Trim()
                 $versionInfo = @{ Current = $currentVersion; Available = $availableVersion }
-                if ($id) { $upgradableById[$id] = $versionInfo }
-                if ($name) { $upgradableByName[$name] = $versionInfo }
+                if ($id) { $upgradableById[$id] = $versionInfo }; if ($name) { $upgradableByName[$name] = $versionInfo }
             }
         }
     }
-
-    $packageStatusList = @()
-    for ($i = 0; $i -lt $CatalogPackages.Count; $i++) {
-        $pkg = $CatalogPackages[$i]
-        $installId = $pkg.installId
-        $displayName = if ($pkg.name) { $pkg.name } else { $installId }
-        Write-Progress -Activity "Procesando estado de paquetes Winget (CLI)" -Status "Verificando: ${displayName}" -PercentComplete (($i / $CatalogPackages.Count) * 100)
-
-        $status = "No Instalado"; $versionInfo = ""; $isUpgradable = $false
-
-        # Decidir qué mapas y qué clave usar (checkName o installId)
-        $useNameCheck = -not [string]::IsNullOrEmpty($pkg.checkName)
-        $key = if ($useNameCheck) { $pkg.checkName } else { $installId }
-        $installedMap = if ($useNameCheck) { $installedByName } else { $installedById }
-        $upgradableMap = if ($useNameCheck) { $upgradableByName } else { $upgradableById }
-
-        if ($upgradableMap.ContainsKey($key)) {
-            $status = "Actualización Disponible"
-            $versionInfo = "(v$($upgradableMap[$key].Current) -> v$($upgradableMap[$key].Available))"
-            $isUpgradable = $true
-        } elseif ($installedMap.ContainsKey($key)) {
-            $status = "Instalado"
-            $versionInfo = "(v$($installedMap[$key]))"
-        }
-
-        $packageStatusList += [PSCustomObject]@{
-            DisplayName  = $displayName; Package = $pkg; Status = $status
-            VersionInfo  = $versionInfo; IsUpgradable = $isUpgradable
-        }
-    }
-    Write-Progress -Activity "Procesando estado de paquetes Winget (CLI)" -Completed
-    return $packageStatusList
+    return _Process-WingetCatalog -CatalogPackages $CatalogPackages -InstalledMap $installedById -UpgradableMap $upgradableById -InstalledMapByName $installedByName -UpgradableMapByName $upgradableByName
 }
 
 #region Package Action Helpers
@@ -245,6 +221,7 @@ function _Install-Package {
         if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
+    if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
 }
 
 function _Uninstall-Package {
@@ -270,6 +247,7 @@ function _Update-Package {
         $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
+    if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
 }
 #endregion
 
@@ -316,6 +294,10 @@ function _Invoke-SinglePackageMenu {
     }
 }
 
+# Variables de caché a nivel de script para el estado de los paquetes
+$script:chocolateyStatusCache = $null
+$script:wingetStatusCache = $null
+
 function Invoke-SoftwareManagerUI {
     param(
         [string]$Manager,
@@ -335,12 +317,17 @@ function Invoke-SoftwareManagerUI {
     while (-not $exitManagerUI) {
         Show-Header -Title "FASE 2: Administrador de Paquetes (${Manager})" -NoClear
 
-        Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para ${Manager}..."
-        $packageStatusList = if ($Manager -eq 'Chocolatey') {
-            _Get-ChocolateyPackageStatus -CatalogPackages $catalogPackages
-        } else {
-            _Get-WingetPackageStatus -CatalogPackages $catalogPackages
+        $cacheVarName = "script:${Manager}StatusCache"
+        if ($null -eq (Get-Variable -Name $cacheVarName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Value)) {
+            Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para ${Manager} (puede tardar)..."
+            $statusList = if ($Manager -eq 'Chocolatey') {
+                _Get-ChocolateyPackageStatus -CatalogPackages $catalogPackages
+            } else {
+                _Get-WingetPackageStatus -CatalogPackages $catalogPackages
+            }
+            Set-Variable -Name $cacheVarName -Value $statusList
         }
+        $packageStatusList = Get-Variable -Name $cacheVarName | Select-Object -ExpandProperty Value
 
         if ($null -eq $packageStatusList) {
             Write-Styled -Type Error -Message "No se pudo continuar debido a un error al obtener el estado de los paquetes."
@@ -356,46 +343,36 @@ function Invoke-SoftwareManagerUI {
             }
         }
         $actionOptions = [ordered]@{
-             'I' = 'Instalar TODOS los paquetes pendientes.'
+             'A' = 'Aplicar todas las instalaciones y actualizaciones pendientes.'
+             'R' = 'Refrescar la lista de paquetes.'
+             '0' = 'Volver al menú anterior.'
         }
-        if (($packageStatusList | Where-Object { $_.IsUpgradable }).Count -gt 0) {
-            $actionOptions['A'] = 'Actualizar TODOS los paquetes desactualizados.'
-        }
-        $actionOptions['R'] = 'Refrescar la lista de paquetes.'
-        $actionOptions['0'] = 'Volver al menú anterior.'
 
         $choice = Invoke-StandardMenu -Title "FASE 2: Administrador de Paquetes (${Manager})" -MenuItems $menuItems -ActionOptions $actionOptions
 
         switch ($choice) {
-            'I' {
-                $packagesToInstall = $packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }
-                if ($packagesToInstall.Count -gt 0) {
-                    Write-Styled -Type Info -Message "Instalando $($packagesToInstall.Count) paquetes..."
-                    try {
-                        foreach ($item in $packagesToInstall) { _Install-Package -Manager $Manager -Item $item }
-                    } catch {
-                        Write-Styled -Type Error -Message "Ocurrió un error durante la instalación masiva."
-                        Pause-And-Return
-                    }
-                } else {
-                    Write-Styled -Type Info -Message "No hay paquetes nuevos para instalar."; Start-Sleep -Seconds 2
-                }
-            }
             'A' {
-                $packagesToUpdate = $packageStatusList | Where-Object { $_.IsUpgradable }
-                if ($packagesToUpdate.Count -gt 0) {
-                    Write-Styled -Type Info -Message "Actualizando $($packagesToUpdate.Count) paquetes..."
+                $packagesToProcess = $packageStatusList | Where-Object { $_.Status -eq 'No Instalado' -or $_.IsUpgradable }
+                if ($packagesToProcess.Count -gt 0) {
+                    Write-Styled -Type Info -Message "Procesando $($packagesToProcess.Count) paquetes..."
                     try {
-                        foreach ($item in $packagesToUpdate) { _Update-Package -Manager $Manager -Item $item }
+                        foreach ($item in $packagesToProcess) {
+                            if ($item.IsUpgradable) {
+                                _Update-Package -Manager $Manager -Item $item
+                            } else {
+                                _Install-Package -Manager $Manager -Item $item
+                            }
+                        }
+                        Set-Variable -Name $cacheVarName -Value $null # Invalidar caché después de la acción
                     } catch {
-                        Write-Styled -Type Error -Message "Ocurrió un error durante la actualización masiva."
+                        Write-Styled -Type Error -Message "Ocurrió un error durante el procesamiento masivo."
                         Pause-And-Return
                     }
                 } else {
-                    Write-Styled -Type Info -Message "No hay paquetes para actualizar."; Start-Sleep -Seconds 2
+                    Write-Styled -Type Info -Message "No hay paquetes para instalar o actualizar."; Start-Sleep -Seconds 2
                 }
             }
-            'R' { continue }
+            'R' { Set-Variable -Name $cacheVarName -Value $null; continue }
             '0' { $exitManagerUI = $true }
             default { # Es un número
                 $packageIndex = [int]$choice - 1
@@ -547,14 +524,18 @@ function Invoke-Phase2_SoftwareMenu {
                         $statusFunction = if ($manager -eq 'Chocolatey') { Get-Command '_Get-ChocolateyPackageStatus' } else { Get-Command '_Get-WingetPackageStatus' }
                         $packageStatusList = & $statusFunction -CatalogPackages $catalogPackages
 
-                        $packagesToInstall = $packageStatusList | Where-Object { $_.Status -eq 'No Instalado' }
-                        if ($packagesToInstall.Count -gt 0) {
-                             Write-Styled -Type Info -Message "Instalando $($packagesToInstall.Count) paquetes de ${manager}..."
-                             foreach ($item in $packagesToInstall) {
-                                _Install-Package -Manager $manager -Item $item
+                        $packagesToProcess = $packageStatusList | Where-Object { $_.Status -eq 'No Instalado' -or $_.IsUpgradable }
+                        if ($packagesToProcess.Count -gt 0) {
+                             Write-Styled -Type Info -Message "Procesando $($packagesToProcess.Count) paquetes de ${manager}..."
+                             foreach ($item in $packagesToProcess) {
+                                if ($item.IsUpgradable) {
+                                    _Update-Package -Manager $manager -Item $item
+                                } else {
+                                    _Install-Package -Manager $manager -Item $item
+                                }
                              }
                         } else {
-                            Write-Styled -Type Info -Message "No hay paquetes nuevos para instalar de ${manager}."
+                            Write-Styled -Type Info -Message "No hay paquetes nuevos para instalar o actualizar de ${manager}."
                         }
                     }
                     Pause-And-Return
