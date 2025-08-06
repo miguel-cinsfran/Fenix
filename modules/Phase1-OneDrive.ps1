@@ -36,7 +36,7 @@ function Audit-And-Repair-UserShellFolders {
         $issuesFound | ForEach-Object { $pattern = [regex]::Escape($env:USERPROFILE) + '.*\\OneDrive'; $newValue = $_.BadValue -replace $pattern, "$env:USERPROFILE"; Set-ItemProperty -Path $_.Key -Name $_.Name -Value $newValue -Type ExpandString }
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
         Write-Styled -Message "Reiniciando Explorador para aplicar cambios..." -NoNewline; Get-Process explorer | Stop-Process -Force; Write-Host " [ÉXITO]" -F $Global:Theme.Success
-        Write-Styled -Type Warn -Message "ACCIÓN MANUAL RECOMENDADA: Reinicie el equipo para garantizar la correcta aplicación de los cambios del Registro."
+        Invoke-RestartPrompt
     } else {
         Write-Styled -Type Error -Message "Consentimiento no otorgado. El Registro no ha sido modificado."
         Write-Styled -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Corrija manualmente las rutas del registro que apuntan a OneDrive."

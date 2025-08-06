@@ -48,10 +48,64 @@ function Write-Styled {
     else { Write-Host "$prefix$Message" -F $Global:Theme[$Type] }
 }
 
+function Invoke-StandardMenu {
+    param(
+        [string]$Title,
+        [array]$MenuItems,
+        [orderedhashtable]$ActionOptions,
+        [string]$PromptMessage = "Seleccione una opción"
+    )
+    Show-Header -Title $Title
+
+    # Display menu items (numeric choices)
+    for ($i = 0; $i -lt $MenuItems.Count; $i++) {
+        $item = $MenuItems[$i]
+        # Default values
+        $icon = "[ ]"
+        $color = $Global:Theme.Step
+        $statusText = ""
+
+        if ($item.Status) {
+            $statusText = "- $($item.Status)"
+            switch ($item.Status) {
+                'Aplicado'                { $icon = "[✓]"; $color = $Global:Theme.Success }
+                'Actualización Disponible' { $icon = "[↑]"; $color = $Global:Theme.Warn }
+                'Instalado'               { $icon = "[✓]"; $color = $Global:Theme.Success }
+                'Pendiente'               { $icon = "[ ]"; $color = $Global:Theme.Warn }
+                'Aplicado (No Reversible)'{ $icon = "[✓]"; $color = $Global:Theme.Info }
+            }
+        }
+
+        $line = "{0,-4} {1,2}. {2,-55} {3}" -f $icon, ($i + 1), $item.Description, $statusText
+        Write-Host $line -ForegroundColor $color
+    }
+    Write-Host
+
+    # Display action options (letter choices)
+    $validChoices = @() + (1..$MenuItems.Count)
+    foreach ($key in $ActionOptions.Keys) {
+        Write-Styled -Type Consent -Message "-> [$key] $($ActionOptions[$key])"
+        $validChoices += $key
+    }
+
+    return Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage $PromptMessage
+}
+
 function Pause-And-Return {
     param([string]$Message = "`nPresione Enter para continuar...")
     Write-Styled -Type Consent -Message $Message -NoNewline
     Read-Host | Out-Null
+}
+
+function Invoke-RestartPrompt {
+    Write-Styled -Type Warn -Message "Se requiere un reinicio para aplicar completamente los cambios."
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?") -eq 'S') {
+        Write-Styled -Type Info -Message "Reiniciando el equipo en 5 segundos..."
+        Start-Sleep -Seconds 5
+        Restart-Computer -Force
+    } else {
+        Write-Styled -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Por favor, reinicie el equipo lo antes posible."
+    }
 }
 
 function Invoke-MenuPrompt {
@@ -149,6 +203,45 @@ function Invoke-JobWithTimeout {
     $result.Output = Receive-Job $job
     Remove-Job $job -Force
     return $result
+}
+
+function Invoke-ProtectedRegistryAction {
+    param(
+        [string]$KeyPath,
+        [scriptblock]$Action
+    )
+    if (-not (Test-Path $KeyPath)) {
+        try {
+            New-Item -Path $KeyPath -Force -ErrorAction Stop | Out-Null
+        } catch {
+            throw "No se pudo crear la clave de registro requerida en '$KeyPath': $($_.Exception.Message)"
+        }
+    }
+
+    $originalSddl = (Get-Acl -Path $KeyPath).Sddl
+    try {
+        $acl = Get-Acl -Path $KeyPath
+        $administratorsSid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-32-544")
+        $acl.SetOwner($administratorsSid)
+        $rule = New-Object System.Security.AccessControl.RegistryAccessRule($administratorsSid, "FullControl", "Allow")
+        $acl.AddAccessRule($rule)
+        Set-Acl -Path $KeyPath -AclObject $acl -ErrorAction Stop
+
+        # Execute the provided action
+        & $Action
+    }
+    finally {
+        # Restore original permissions
+        if ($originalSddl) {
+            try {
+                $restoredAcl = New-Object System.Security.AccessControl.RegistrySecurity
+                $restoredAcl.SetSecurityDescriptorSddlForm($originalSddl)
+                Set-Acl -Path $KeyPath -AclObject $restoredAcl -ErrorAction Stop
+            } catch {
+                Write-Styled -Type Error -Message "FALLO CRÍTICO al restaurar permisos en '$KeyPath'. Se requiere intervención manual."
+            }
+        }
+    }
 }
 
 

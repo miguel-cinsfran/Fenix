@@ -20,26 +20,42 @@ function _Handle-Distro-Installation {
     Write-Styled -Type Step -Message "Verificando distribuciones instaladas..."
     $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones"
 
+    # Si no hay distros, intentar instalar Ubuntu por defecto
     if ($listResult.Output -match "No hay distribuciones instaladas" -or -not $listResult.Success) {
         Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux instaladas."
-    } else {
+        Write-Styled -Type Consent -Message "El script puede intentar instalar la distribución 'Ubuntu' por defecto."
+        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea continuar con la instalación de Ubuntu?") -eq 'S') {
+            $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution Ubuntu" -FailureStrings "Error" -Activity "Instalando Ubuntu"
+            if ($installResult.Success) {
+                Write-Styled -Type Success -Message "Ubuntu instalado correctamente."
+                # Refrescar la lista para mostrar la nueva distro
+                $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones"
+            } else {
+                Write-Styled -Type Error -Message "Error al instalar Ubuntu: $($installResult.Output)"
+            }
+        }
+    }
+
+    # Mostrar las distribuciones encontradas (si las hay)
+    if ($listResult.Success -and $listResult.Output -notmatch "No hay distribuciones instaladas") {
         Write-Styled -Type Success -Message "Se encontraron las siguientes distribuciones:"
         $listResult.Output | ForEach-Object { if ($_ -and $_ -notmatch "instalar distribuciones") { Write-Styled -Type Info -Message "  $_" } }
     }
 
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea instalar o reinstalar una distribución?") -eq 'S') {
+    # Preguntar si se desea instalar OTRA distribución
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea buscar e instalar otra distribución de Linux?") -eq 'S') {
         $onlineListResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --online" -Activity "Buscando distribuciones online"
         if ($onlineListResult.Success) {
             Write-Styled -Type Info -Message "Distribuciones disponibles:"
             Write-Host ($onlineListResult.Output)
-            $distroToInstall = Read-Host "Escriba el nombre de la distribución que desea instalar (o presione Enter para instalar 'Ubuntu' por defecto)"
-            if (-not $distroToInstall) { $distroToInstall = "Ubuntu" }
-
-            $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall"
-            if ($installResult.Success) {
-                Write-Styled -Type Success -Message "${distroToInstall} instalado correctamente."
-            } else {
-                throw "Error al instalar ${distroToInstall}: $($installResult.Output)"
+            $distroToInstall = Read-Host "Escriba el nombre de la distribución que desea instalar (o presione Enter para cancelar)"
+            if ($distroToInstall) {
+                 $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install --distribution $distroToInstall" -FailureStrings "Error" -Activity "Instalando $distroToInstall"
+                if ($installResult.Success) {
+                    Write-Styled -Type Success -Message "${distroToInstall} instalado correctamente."
+                } else {
+                    throw "Error al instalar ${distroToInstall}: $($installResult.Output)"
+                }
             }
         }
     }
@@ -69,12 +85,11 @@ function Invoke-Phase4_WSL {
                 $featuresToEnable | ForEach-Object { Write-Styled -Type Info -Message "  - $_" }
                 if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Autoriza al script a habilitar estas características?") -eq 'S') {
                     foreach ($feature in $featuresToEnable) { _Enable-WindowsFeature -FeatureName $feature }
-                    Write-Styled -Type Error -Message "ACCIÓN REQUERIDA: Se han habilitado las características de Windows necesarias."
-                    Write-Styled -Type Error -Message "DEBE REINICIAR EL EQUIPO para poder continuar con la instalación de WSL."
+                    Invoke-RestartPrompt
                 } else {
                     Write-Styled -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos."
+                    Pause-And-Return
                 }
-                Pause-And-Return
                 return
             }
 
