@@ -97,7 +97,8 @@ function _Get-AvailableWslDistros {
         return @()
     }
 
-    $lines = $onlineResult.Output -split '\r?\n'
+    # Split the output into lines and remove any blank or whitespace-only lines to make parsing reliable.
+    $lines = $onlineResult.Output -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
     $distros = @()
     $parsing = $false
 
@@ -138,21 +139,25 @@ function _Get-AvailableWslDistros {
 }
 
 function Invoke-WslUpdateCheck {
-    Show-Header -Title "Buscar Actualizaciones de WSL" -NoClear
+    Show-Header -Title "Estado y Actualizaciones de WSL" -NoClear
 
-    Write-Styled -Type Step -Message "Mostrando el estado actual de WSL..."
+    Write-Styled -Type Step -Message "Obteniendo el estado actual de WSL..."
     $statusResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--status" -Activity "Obteniendo estado de WSL"
+
     if ($statusResult.Success) {
         Write-Host $statusResult.Output
     } else {
-        Write-Styled -Type Warn -Message "No se pudo obtener el estado de WSL. Es posible que no esté instalado."
+        Write-Styled -Type Error -Message "No se pudo obtener el estado de WSL."
+        Write-Host $statusResult.Output
         Pause-And-Return
-        return
+        return # Exit if we can't even get the status
     }
 
+    Write-Host # Add a blank line for spacing before the next prompt
+
     Write-Styled -Type Consent -Message "Esta opción buscará e instalará automáticamente la última versión del núcleo de WSL."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea continuar?") -ne 'S') {
-        Write-Styled -Type Info -Message "Operación cancelada."
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea buscar actualizaciones ahora?") -ne 'S') {
+        Write-Styled -Type Info -Message "Operación de actualización cancelada."
         Pause-And-Return
         return
     }
@@ -461,22 +466,6 @@ function Invoke-WslUninstall {
 
     Pause-And-Return
 }
-
-function Show-WslStatus {
-    Show-Header -Title "Estado de WSL" -NoClear
-
-    Write-Styled -Type Step -Message "Ejecutando 'wsl --status'..."
-    $statusResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--status" -Activity "Obteniendo estado de WSL"
-
-    if ($statusResult.Success) {
-        Write-Host $statusResult.Output
-    } else {
-        Write-Styled -Type Error -Message "No se pudo obtener el estado de WSL."
-        Write-Host $statusResult.Output
-    }
-
-    Pause-And-Return
-}
 #endregion
 
 
@@ -496,12 +485,11 @@ function Invoke-Phase4_WSL {
             Show-Header -Title "Administración de WSL" -NoClear
 
             $menuItems = @(
-                @{ Description = "Buscar actualizaciones de WSL" },
+                @{ Description = "Ver estado y buscar actualizaciones de WSL" },
                 @{ Description = "Administrar distribuciones instaladas" },
                 @{ Description = "Instalar una nueva distribución" },
                 @{ Description = "Administrar características de Windows para WSL" },
-                @{ Description = "Desinstalar WSL" },
-                @{ Description = "Ver estado de WSL" }
+                @{ Description = "Desinstalar WSL" }
             )
 
             $actionOptions = @{
@@ -516,7 +504,6 @@ function Invoke-Phase4_WSL {
                 "3" { Show-AvailableDistros }
                 "4" { Manage-WslFeatures }
                 "5" { Invoke-WslUninstall }
-                "6" { Show-WslStatus }
                 "S" { Write-Styled -Type Info -Message "Saliendo del menú de WSL."; return }
             }
         }

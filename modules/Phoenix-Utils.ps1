@@ -264,7 +264,8 @@ function Invoke-NativeCommand {
         [string]$ProgressRegex
     )
 
-    $scriptBlock = [scriptblock]::Create("& `"$Executable`" $ArgumentList 2>&1; if (`$LASTEXITCODE -ne 0) { throw 'ExitCode: ' + `$LASTEXITCODE }")
+    # Set console encoding to UTF-8 within the job's scriptblock to ensure correct character decoding from native commands.
+    $scriptBlock = [scriptblock]::Create("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & `"$Executable`" $ArgumentList 2>&1; if (`$LASTEXITCODE -ne 0) { throw 'ExitCode: ' + `$LASTEXITCODE }")
 
     $jobResult = Invoke-JobWithTimeout -ScriptBlock $scriptBlock -Activity $Activity -IdleTimeoutEnabled $IdleTimeoutEnabled -ProgressRegex $ProgressRegex
 
