@@ -274,8 +274,6 @@ function _Update-Package {
 }
 #endregion
 
-Export-ModuleMember -Function Invoke-SoftwareSearchAndInstall
-
 #region Menus
 function _Invoke-SinglePackageMenu {
     param(
