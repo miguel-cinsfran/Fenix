@@ -1,0 +1,37 @@
+﻿[
+  // Vistas de depuración directas
+  {
+    "key": "alt+v",
+    "command": "workbench.debug.action.focusVariablesView",
+    "when": "inDebugMode"
+  },
+  {
+    "key": "alt+c",
+    "command": "workbench.debug.action.focusCallStackView",
+    "when": "inDebugMode"
+  },
+  {
+    "key": "alt+w",
+    "command": "workbench.debug.action.focusWatchView",
+    "when": "inDebugMode"
+  },
+  {
+    "key": "alt+b",
+    "command": "workbench.debug.action.focusBreakpointsView",
+    "when": "inDebugMode"
+  },
+
+  // Ayuda y modos accesibles
+  {
+    "key": "ctrl+alt+a",
+    "command": "workbench.action.openAccessibilityHelp"
+  },
+  {
+    "key": "ctrl+alt+t",
+    "command": "accessibility.toggleScreenReaderOptimized"
+  },
+  {
+    "key": "ctrl+alt+o",
+    "command": "accessibility.showAccessibleView"
+  }
+]

@@ -1,0 +1,24 @@
+﻿{
+  //–– Screen reader optimizaciones
+  "editor.accessibilitySupport": "on",
+  "editor.accessibilityPageSize": 100,
+  "accessibility.accessibleView": true,
+
+  //–– Audio cues para fiabilidad sin vista
+  "audioCues.enabled": "on",
+  "audioCues.severity": ["error","warning"],
+  "audioCues.lineHasError": "onFirstLine",
+  "audioCues.taskCompleted": "onSuccess",
+  "audioCues.terminal": "onCommandEnded",
+
+  //–– Terminal accesible
+  "terminal.integrated.accessibilitySupport": "on",
+
+  //–– Navegación por listas con teclado
+  "workbench.list.defaultKeyboardNavigation": "simple",
+  "workbench.accessibility.enableAnnouncements": true,
+
+  //–– Minimizar distracciones visuales
+  "editor.minimap.enabled": false,
+  "explorer.enableTimeline": false
+}
