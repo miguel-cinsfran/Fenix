@@ -323,6 +323,10 @@ function _Install-Package {
         if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
+
+    if ($pkg.PSObject.Properties.Match('postInstallConfig') -and $pkg.postInstallConfig) {
+        Invoke-PostInstallConfiguration -Package $pkg
+    }
     if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
 }
 
@@ -348,6 +352,10 @@ function _Update-Package {
         # Winget upgrade is the same as install
         $wingetArgs = @("install", "--id", $pkg.installId, "--accept-package-agreements", "--accept-source-agreements")
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
+    }
+
+    if ($pkg.PSObject.Properties.Match('postInstallConfig') -and $pkg.postInstallConfig) {
+        Invoke-PostInstallConfiguration -Package $pkg
     }
     if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
 }

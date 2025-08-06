@@ -29,6 +29,10 @@
             "rebootRequired": {
                 "description": "Opcional. Si es verdadero, se recomienda reiniciar el sistema después de la operación.",
                 "type": "boolean"
+            },
+            "postInstallConfig": {
+                "description": "Opcional. Si es verdadero, indica que el paquete tiene una configuración personalizada para aplicar post-instalación.",
+                "type": "boolean"
             }
         },
         "required": [

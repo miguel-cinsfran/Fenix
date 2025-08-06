@@ -321,3 +321,62 @@ function Test-SoftwareCatalog {
     }
     return $isValid
 }
+
+function Invoke-PostInstallConfiguration {
+    param(
+        [Parameter(Mandatory = $true)]
+        [psobject]$Package
+    )
+
+    $configPath = Join-Path $PSScriptRoot "assets/configs"
+    $packageConfigPath = Join-Path $configPath $Package.installId
+
+    if (-not (Test-Path $packageConfigPath)) {
+        Write-Styled -Type Warn -Message "No se encontró un directorio de configuración para $($Package.name) en '$packageConfigPath'."
+        return
+    }
+
+    $friendlyName = if ($Package.name) { $Package.name } else { $Package.installId }
+    Write-Styled -Type Consent -Message "El paquete '$friendlyName' tiene una configuración de accesibilidad y productividad disponible."
+    $choice = Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage "¿Desea aplicar esta configuración ahora?"
+
+    if ($choice -ne 'S') {
+        Write-Styled -Type Info -Message "Se omitió la aplicación de la configuración."
+        return
+    }
+
+    # Lógica específica para Visual Studio Code
+    if ($Package.installId -eq "Microsoft.VisualStudioCode") {
+        $vsCodeConfigPath = Join-Path $env:APPDATA "Code/User"
+
+        Write-Styled -Type Info -Message "Aplicando configuración para Visual Studio Code..."
+        Write-Styled -Type SubStep -Message "Ruta de destino: $vsCodeConfigPath"
+
+        try {
+            if (-not (Test-Path $vsCodeConfigPath)) {
+                Write-Styled -Type SubStep -Message "Creando directorio de configuración de VSCode..."
+                New-Item -Path $vsCodeConfigPath -ItemType Directory -Force -ErrorAction Stop | Out-Null
+            }
+
+            $sourceFiles = Get-ChildItem -Path $packageConfigPath
+            if ($sourceFiles.Count -eq 0) {
+                Write-Styled -Type Warn -Message "No se encontraron archivos de configuración en '$packageConfigPath'."
+                return
+            }
+
+            foreach ($file in $sourceFiles) {
+                $destinationFile = Join-Path $vsCodeConfigPath $file.Name
+                Write-Styled -Type SubStep -Message "Copiando '$($file.Name)' a '$vsCodeConfigPath'..."
+                Copy-Item -Path $file.FullName -Destination $destinationFile -Force -ErrorAction Stop
+            }
+
+            Write-Styled -Type Success -Message "La configuración para '$friendlyName' se ha aplicado correctamente."
+
+        } catch {
+            Write-Styled -Type Error -Message "Ocurrió un error al aplicar la configuración para '$friendlyName'."
+            Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Styled -Type Warn -Message "Actualmente no hay una lógica de configuración definida para '$friendlyName'."
+    }
+}
