@@ -77,6 +77,6 @@ function Invoke-Phase1_OneDrive {
         Audit-And-Repair-UserShellFolders
     } catch {
         Write-Styled -Type Error -Message "Error fatal en la erradicación de OneDrive: $($_.Exception.Message)"
-        Pause-And-Return
+        Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para volver al menú."
     }
 }

@@ -5,9 +5,39 @@
     Contiene la lógica para cargar catálogos de Chocolatey y Winget, y presenta
     un submenú para permitir la instalación granular o completa de los paquetes.
 .NOTES
-    Versión: 2.0
+    Versión: 2.1
     Autor: miguel-cinsfran
 #>
+
+#region Proveedores de Gestores de Paquetes
+
+$script:PackageManagers = @{
+    Chocolatey = [PSCustomObject]@{
+        Name           = 'Chocolatey'
+        Executable     = 'choco'
+        Commands       = @{
+            Install   = 'install {installId} -y {params}'
+            Upgrade   = 'upgrade {installId} -y'
+            Uninstall = 'uninstall {installId} -y'
+        }
+        StatusChecker  = { param($packages) _Get-ChocolateyPackageStatus -CatalogPackages $packages }
+        FailureStrings = @("not found", "was not found", "no se encontró")
+    }
+    Winget = [PSCustomObject]@{
+        Name           = 'Winget'
+        Executable     = 'winget'
+        Commands       = @{
+            # Winget usa 'install' para actualizar si el paquete ya existe
+            Install   = 'install --id {installId} --accept-package-agreements --accept-source-agreements {source}'
+            Upgrade   = 'install --id {installId} --accept-package-agreements --accept-source-agreements'
+            Uninstall = 'uninstall --id {installId} --accept-package-agreements --silent'
+        }
+        StatusChecker  = { param($packages) _Get-WingetPackageStatus -CatalogPackages $packages }
+        FailureStrings = @("No package found", "No se encontró ningún paquete")
+    }
+}
+
+#endregion
 
 function _Execute-SoftwareJob {
     param(
@@ -17,9 +47,16 @@ function _Execute-SoftwareJob {
         [string[]]$FailureStrings
     )
 
+    # Definir el patrón regex para el progreso basado en el ejecutable.
+    $progressRegex = ''
+    switch ($Executable) {
+        'choco'  { $progressRegex = 'Progress:\s*(\d+)%' }
+        'winget' { $progressRegex = '\s(\d+)\s*%' }
+    }
+
     # Deshabilitar el timeout de inactividad para instalaciones de software,
     # ya que pueden tener largos periodos de descarga sin actividad en la consola.
-    $result = Invoke-NativeCommand -Executable $Executable -ArgumentList $ArgumentList -FailureStrings $FailureStrings -Activity "Ejecutando: ${Executable} ${ArgumentList}" -IdleTimeoutEnabled $false
+    $result = Invoke-NativeCommand -Executable $Executable -ArgumentList $ArgumentList -FailureStrings $FailureStrings -Activity "Ejecutando: ${Executable} ${ArgumentList}" -IdleTimeoutEnabled $false -ProgressRegex $progressRegex
 
     if (-not $result.Success) {
         Write-Styled -Type Error -Message "Falló la operación para ${PackageName}."
@@ -35,56 +72,45 @@ function _Execute-SoftwareJob {
     }
 }
 
-function _Get-ChocolateyPackageStatus {
-    param([array]$CatalogPackages)
+#region Lógica de Estado de Paquetes (Abstraída)
 
-    # Usar invocación de proceso directa para Chocolatey para evitar problemas de I/O con Start-Job.
-    Write-Styled -Type Info -Message "Consultando paquetes de Chocolatey instalados..."
-    $installedPackages = @{}
-    try {
-        $listOutput = choco list --limit-output 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "choco list falló con código de salida $LASTEXITCODE" }
-        $listOutput | ForEach-Object {
-            $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id.Trim()] = $version.Trim() }
-        }
-    } catch {
-        Write-Styled -Type Error -Message "No se pudo obtener la lista de paquetes instalados con Chocolatey: $($_.Exception.Message)"
-        return $null
-    }
-
-    Write-Styled -Type Info -Message "Buscando actualizaciones para paquetes de Chocolatey..."
-    $outdatedPackages = @{}
-    try {
-        $outdatedOutput = choco outdated --limit-output 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "choco outdated falló con código de salida $LASTEXITCODE" }
-        $outdatedOutput | ForEach-Object {
-            $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $outdatedPackages[$id.Trim()] = @{ Current = $current.Trim(); Available = $available.Trim() } }
-        }
-    } catch {
-        # Es posible que no haya paquetes desactualizados, lo que puede generar un error. No es un fallo crítico.
-        Write-Styled -Type Info -Message "No se encontraron paquetes de Chocolatey para actualizar o hubo un error no crítico al verificar."
-    }
-
-    # Paso 2: Procesar la lista del catálogo contra los resultados obtenidos.
+# Función genérica para comparar un catálogo con mapas de paquetes instalados/actualizables.
+function _Get-PackageStatusFromMaps {
+    param(
+        [string]$ManagerName,
+        [array]$CatalogPackages,
+        [hashtable]$InstalledMap,
+        [hashtable]$UpgradableMap,
+        [hashtable]$InstalledMapByName,
+        [hashtable]$UpgradableMapByName
+    )
     $packageStatusList = @()
     for ($i = 0; $i -lt $CatalogPackages.Count; $i++) {
         $pkg = $CatalogPackages[$i]
         $installId = $pkg.installId
         $displayName = if ($pkg.name) { $pkg.name } else { $installId }
 
-        Write-Progress -Activity "Procesando estado de paquetes de Chocolatey" -Status "Verificando: ${displayName}" -PercentComplete (($i / $CatalogPackages.Count) * 100)
+        Write-Progress -Activity "Procesando estado de paquetes de $ManagerName" -Status "Verificando: $displayName" -PercentComplete (($i / $CatalogPackages.Count) * 100)
 
         $status = "No Instalado"
         $versionInfo = ""
         $isUpgradable = $false
 
-        if ($outdatedPackages.ContainsKey($installId)) {
+        # Determinar si usar el nombre del paquete para la comprobación (para casos como WhatsApp de la MS Store)
+        $useNameCheck = $InstalledMapByName -and (-not [string]::IsNullOrEmpty($pkg.checkName))
+        $key = if ($useNameCheck) { $pkg.checkName } else { $installId }
+        $currentInstalledMap = if ($useNameCheck) { $InstalledMapByName } else { $InstalledMap }
+        $currentUpgradableMap = if ($useNameCheck) { $UpgradableMapByName } else { $UpgradableMap }
+
+        if ($currentUpgradableMap -and $currentUpgradableMap.ContainsKey($key)) {
             $status = "Actualización Disponible"
-            $versionInfo = "(v$($outdatedPackages[$installId].Current) -> v$($outdatedPackages[$installId].Available))"
+            $versionInfo = "(v$($currentUpgradableMap[$key].Current) -> v$($currentUpgradableMap[$key].Available))"
             $isUpgradable = $true
-        } elseif ($installedPackages.ContainsKey($installId)) {
+        } elseif ($currentInstalledMap -and $currentInstalledMap.ContainsKey($key)) {
             $status = "Instalado"
-            $versionInfo = "(v$($installedPackages[$installId]))"
+            # El valor puede ser un string (choco) o un hashtable (winget)
+            $installedVersion = if ($currentInstalledMap[$key] -is [string]) { $currentInstalledMap[$key] } else { $currentInstalledMap[$key].Current }
+            $versionInfo = "(v$($installedVersion))"
         }
 
         $packageStatusList += [PSCustomObject]@{
@@ -95,180 +121,96 @@ function _Get-ChocolateyPackageStatus {
             IsUpgradable = $isUpgradable
         }
     }
-    Write-Progress -Activity "Procesando estado de paquetes de Chocolatey" -Completed
+    Write-Progress -Activity "Procesando estado de paquetes de $ManagerName" -Completed
     return $packageStatusList
 }
 
-# Lógica de procesamiento de catálogo compartida para Winget
-function _Process-WingetCatalog {
-    param(
-        [array]$CatalogPackages,
-        [hashtable]$InstalledMap,
-        [hashtable]$UpgradableMap,
-        [hashtable]$InstalledMapByName,
-        [hashtable]$UpgradableMapByName
-    )
-    $packageStatusList = @()
-    for ($i = 0; $i -lt $CatalogPackages.Count; $i++) {
-        $pkg = $CatalogPackages[$i]; $installId = $pkg.installId
-        $displayName = if ($pkg.name) { $pkg.name } else { $installId }
-        Write-Progress -Activity "Procesando estado de paquetes Winget" -Status "Verificando: ${displayName}" -PercentComplete (($i / $CatalogPackages.Count) * 100)
+# --- Lógica específica de Chocolatey ---
 
-        $status = "No Instalado"; $versionInfo = ""; $isUpgradable = $false
+function _Get-ChocolateyInstalledData {
+    $installedPackages = @{}
+    $upgradablePackages = @{}
 
-        $useNameCheck = -not [string]::IsNullOrEmpty($pkg.checkName)
-        $key = if ($useNameCheck) { $pkg.checkName } else { $installId }
-        $currentInstalledMap = if ($useNameCheck) { $InstalledMapByName } else { $InstalledMap }
-        $currentUpgradableMap = if ($useNameCheck) { $UpgradableMapByName } else { $UpgradableMap }
-
-        if ($currentUpgradableMap.ContainsKey($key)) {
-            $status = "Actualización Disponible"
-            $versionInfo = "(v$($currentUpgradableMap[$key].Current) -> v$($currentUpgradableMap[$key].Available))"
-            $isUpgradable = $true
-        } elseif ($currentInstalledMap.ContainsKey($key)) {
-            $status = "Instalado"
-            $versionInfo = "(v$($currentInstalledMap[$key]))"
-        }
-
-        $packageStatusList += [PSCustomObject]@{
-            DisplayName  = $displayName; Package = $pkg; Status = $status
-            VersionInfo  = $versionInfo; IsUpgradable = $isUpgradable
-        }
-    }
-    Write-Progress -Activity "Procesando estado de paquetes Winget" -Completed
-    return $packageStatusList
-}
-
-function _Get-WingetPackageStatus {
-    param([array]$CatalogPackages)
-
-    if ($Global:UseWingetCli -or -not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
-        return _Get-WingetPackageStatus_Cli -CatalogPackages $CatalogPackages
-    }
+    Write-Styled -Type Info -Message "Consultando paquetes de Chocolatey instalados..."
     try {
-        Import-Module Microsoft.WinGet.Client -ErrorAction Stop
-    } catch {
-        Write-Styled -Type Error -Message "No se pudo importar el módulo 'Microsoft.WinGet.Client'."; Write-Styled -Type Warn -Message "Cambiando a método de reserva para Winget."
-        return _Get-WingetPackageStatus_Cli -CatalogPackages $CatalogPackages
-    }
-
-    Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget a través del módulo..."
-    $installedVersionsById = @{}; $installedVersionsByName = @{}
-    $upgradableVersionsById = @{}; $upgradableVersionsByName = @{}
-    try {
-        $allPackages = Get-WinGetPackage
-        if ($null -ne $allPackages) {
-            # Crear mapas duales por ID y por Nombre para manejar todos los casos del catálogo.
-            $installedById = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Id -AsHashTable -AsString
-            $installedByName = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Name -AsHashTable -AsString
-
-            $upgradableById = $allPackages | Where-Object { $_.AvailableVersion -and $_.InstalledVersion } | Group-Object -Property Id -AsHashTable -AsString
-            $upgradableByName = $allPackages | Where-Object { $_.AvailableVersion -and $_.InstalledVersion } | Group-Object -Property Name -AsHashTable -AsString
-
-            # Para los mapas de versiones, necesitamos extraer la propiedad correcta, verificando que no sean nulos.
-            if ($null -ne $installedById) { $installedById.GetEnumerator() | ForEach-Object { $installedVersionsById[$_.Name] = $_.Value[0].InstalledVersion } }
-            if ($null -ne $installedByName) { $installedByName.GetEnumerator() | ForEach-Object { $installedVersionsByName[$_.Name] = $_.Value[0].InstalledVersion } }
-            if ($null -ne $upgradableById) { $upgradableById.GetEnumerator() | ForEach-Object { $upgradableVersionsById[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } } }
-            if ($null -ne $upgradableByName) { $upgradableByName.GetEnumerator() | ForEach-Object { $upgradableVersionsByName[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } } }
+        $listOutput = choco list --limit-output 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "choco list falló con código de salida $LASTEXITCODE" }
+        $listOutput | ForEach-Object {
+            $id, $version = $_ -split '\|'; if ($id) { $installedPackages[$id.Trim()] = $version.Trim() }
         }
     } catch {
-        Write-Styled -Type Error -Message "Fallo crítico al obtener la lista de paquetes de Winget: $($_.Exception.Message)"; return $null
+        throw "No se pudo obtener la lista de paquetes instalados con Chocolatey: $($_.Exception.Message)"
     }
 
-    return _Process-WingetCatalog -CatalogPackages $CatalogPackages -InstalledMap $installedVersionsById -UpgradableMap $upgradableVersionsById -InstalledMapByName $installedVersionsByName -UpgradableMapByName $upgradableVersionsByName
-}
-
-function _Parse-WingetListLine {
-    param([string]$Line)
-
-    # El formato de salida de 'winget list' es:
-    # Nombre               Id                  Versión      Disponible   Fuente
-    # --------------------------------------------------------------------------
-    # Git                  Git.Git             2.39.2       2.40.0       winget
-    # Google Chrome        Google.Chrome       110.0.5481.78
-    # 7-Zip 22.01 (x64)    7zip.7zip           22.01
-
-    $line = $Line.TrimEnd()
-    if ([string]::IsNullOrWhiteSpace($line)) { return $null }
-
-    # Dividir por 2 o más espacios para manejar nombres con espacios.
-    $parts = $line -split '\s{2,}' | Where-Object { $_ }
-    if ($parts.Count -lt 3) { return $null } # Línea malformada
-
-    # La última columna puede ser la fuente.
-    $source = ""
-    if ($parts[-1] -in @('winget', 'msstore')) {
-        $source = $parts[-1]
-        $parts = $parts[0..($parts.Count - 2)]
-    }
-
-    # Si después de quitar la fuente no quedan suficientes partes, la línea es inválida.
-    if ($parts.Count -lt 3) { return $null }
-
-    # Asignación de columnas de derecha a izquierda, que son más consistentes.
-    # El resto de las partes a la izquierda forman el nombre del paquete.
-    $name = ""; $id = ""; $version = ""; $available = ""
-
-    if ($parts.Count -ge 4) { # Formato con 'Disponible': Nombre, Id, Versión, Disponible
-        $available = $parts[-1]
-        $version = $parts[-2]
-        $id = $parts[-3]
-        $name = ($parts[0..($parts.Count - 4)] -join ' ').Trim()
-    } else { # Formato sin 'Disponible': Nombre, Id, Versión
-        $version = $parts[-1]
-        $id = $parts[-2]
-        $name = ($parts[0..($parts.Count - 3)] -join ' ').Trim()
-    }
-
-    # Ignorar valores no útiles para la versión disponible.
-    if ($available -in @('<unknown>', '<desconocido>')) {
-        $available = ""
+    Write-Styled -Type Info -Message "Buscando actualizaciones para paquetes de Chocolatey..."
+    try {
+        $outdatedOutput = choco outdated --limit-output 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "choco outdated falló con código de salida $LASTEXITCODE" }
+        $outdatedOutput | ForEach-Object {
+            $id, $current, $available, $pinned = $_ -split '\|'; if ($id) { $upgradablePackages[$id.Trim()] = @{ Current = $current.Trim(); Available = $available.Trim() } }
+        }
+    } catch {
+        Write-Styled -Type Info -Message "No se encontraron paquetes de Chocolatey para actualizar o hubo un error no crítico al verificar."
     }
 
     return [PSCustomObject]@{
-        Name      = $name
-        Id        = $id
-        Version   = $version
-        Available = $available
-        Source    = $source
+        InstalledMap = $installedPackages
+        UpgradableMap = $upgradablePackages
     }
 }
 
-function _Get-WingetPackageStatus_Cli {
+function _Get-ChocolateyPackageStatus {
     param([array]$CatalogPackages)
+    try {
+        $chocoData = _Get-ChocolateyInstalledData
+        return _Get-PackageStatusFromMaps -ManagerName 'Chocolatey' -CatalogPackages $CatalogPackages -InstalledMap $chocoData.InstalledMap -UpgradableMap $chocoData.UpgradableMap
+    } catch {
+        Write-Styled -Type Error -Message $_.Exception.Message
+        return $null
+    }
+}
+
+# --- Lógica específica de Winget ---
+
+function _Parse-WingetListLine {
+    param([string]$Line)
+    $line = $Line.TrimEnd()
+    if ([string]::IsNullOrWhiteSpace($line)) { return $null }
+    $parts = $line -split '\s{2,}' | Where-Object { $_ }
+    if ($parts.Count -lt 3) { return $null }
+    $source = if ($parts[-1] -in @('winget', 'msstore')) { $parts[-1] } else { "" }
+    if ($source) { $parts = $parts[0..($parts.Count - 2)] }
+    if ($parts.Count -lt 3) { return $null }
+    $name = ""; $id = ""; $version = ""; $available = ""
+    if ($parts.Count -ge 4) {
+        $available = $parts[-1]; $version = $parts[-2]; $id = $parts[-3]; $name = ($parts[0..($parts.Count - 4)] -join ' ').Trim()
+    } else {
+        $version = $parts[-1]; $id = $parts[-2]; $name = ($parts[0..($parts.Count - 3)] -join ' ').Trim()
+    }
+    if ($available -in @('<unknown>', '<desconocido>')) { $available = "" }
+    return [PSCustomObject]@{ Name = $name; Id = $id; Version = $version; Available = $available; Source = $source }
+}
+
+function _Get-WingetInstalledData_Cli {
+    $installedById = @{}; $installedByName = @{}; $upgradableById = @{}; $upgradableByName = @{}
 
     Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget (CLI)..."
     $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --include-unknown --accept-source-agreements --disable-interactivity" -Activity "Listando todos los paquetes de Winget"
-
-    if (-not $listResult.Success) {
-        Write-Styled -Type Error -Message "El comando 'winget list' falló."
-        return $null
-    }
-
-    $installedById = @{}; $installedByName = @{}
-    $upgradableById = @{}; $upgradableByName = @{}
+    if (-not $listResult.Success) { throw "El comando 'winget list' falló." }
 
     $lines = $listResult.Output -split "`n"
-
-    # Encontrar el inicio de los datos, que es después de la línea de guiones '----'.
     $dataStartIndex = 0
-    while ($dataStartIndex -lt $lines.Length -and $lines[$dataStartIndex] -notmatch '^-+$') {
-        $dataStartIndex++
-    }
-    $dataStartIndex++ # Moverse a la línea *después* de los guiones.
+    while ($dataStartIndex -lt $lines.Length -and $lines[$dataStartIndex] -notmatch '^-+$') { $dataStartIndex++ }
+    $dataStartIndex++
 
     if ($dataStartIndex -ge $lines.Length) {
         Write-Styled -Type Warn -Message "No se encontraron datos de paquetes en la salida de winget."
     } else {
-        # Procesar cada línea de datos usando el nuevo parser.
         $lines | Select-Object -Skip $dataStartIndex | ForEach-Object {
             $parsed = _Parse-WingetListLine -Line $_
-            if (-not $parsed) { return } # Ignorar líneas en blanco o malformadas
-
-            # Poblar los mapas de búsqueda.
+            if (-not $parsed) { return }
             if ($parsed.Id) { $installedById[$parsed.Id] = $parsed.Version }
             if ($parsed.Name) { $installedByName[$parsed.Name] = $parsed.Version }
-
             if ($parsed.Available) {
                 $versionInfo = @{ Current = $parsed.Version; Available = $parsed.Available }
                 if ($parsed.Id) { $upgradableById[$parsed.Id] = $versionInfo }
@@ -277,11 +219,111 @@ function _Get-WingetPackageStatus_Cli {
         }
     }
 
-    # Usar la función de procesamiento de catálogo existente con los datos recopilados.
-    return _Process-WingetCatalog -CatalogPackages $CatalogPackages -InstalledMap $installedById -UpgradableMap $upgradableById -InstalledMapByName $installedByName -UpgradableMapByName $upgradableByName
+    return [PSCustomObject]@{
+        InstalledMap = $installedById; UpgradableMap = $upgradableById
+        InstalledMapByName = $installedByName; UpgradableMapByName = $upgradableByName
+    }
 }
 
+function _Get-WingetInstalledData_Module {
+    $installedVersionsById = @{}; $installedVersionsByName = @{}
+    $upgradableVersionsById = @{}; $upgradableVersionsByName = @{}
+
+    Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget a través del módulo..."
+    $allPackages = Get-WinGetPackage
+    if ($null -ne $allPackages) {
+        $installedById = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Id -AsHashTable -AsString
+        $installedByName = $allPackages | Where-Object { $_.InstalledVersion } | Group-Object -Property Name -AsHashTable -AsString
+        $upgradableById = $allPackages | Where-Object { $_.AvailableVersion -and $_.InstalledVersion } | Group-Object -Property Id -AsHashTable -AsString
+        $upgradableByName = $allPackages | Where-Object { $_.AvailableVersion -and $_.InstalledVersion } | Group-Object -Property Name -AsHashTable -AsString
+
+        if ($null -ne $installedById) { $installedById.GetEnumerator() | ForEach-Object { $installedVersionsById[$_.Name] = $_.Value[0].InstalledVersion } }
+        if ($null -ne $installedByName) { $installedByName.GetEnumerator() | ForEach-Object { $installedVersionsByName[$_.Name] = $_.Value[0].InstalledVersion } }
+        if ($null -ne $upgradableById) { $upgradableById.GetEnumerator() | ForEach-Object { $upgradableVersionsById[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } } }
+        if ($null -ne $upgradableByName) { $upgradableByName.GetEnumerator() | ForEach-Object { $upgradableVersionsByName[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } } }
+    }
+
+    return [PSCustomObject]@{
+        InstalledMap = $installedVersionsById; UpgradableMap = $upgradableVersionsById
+        InstalledMapByName = $installedVersionsByName; UpgradableMapByName = $upgradableVersionsByName
+    }
+}
+
+function _Get-WingetPackageStatus {
+    param([array]$CatalogPackages)
+
+    $wingetData = $null
+    try {
+        if ($Global:UseWingetCli -or -not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
+            $wingetData = _Get-WingetInstalledData_Cli
+        } else {
+            try {
+                Import-Module Microsoft.WinGet.Client -ErrorAction Stop
+                $wingetData = _Get-WingetInstalledData_Module
+            } catch {
+                Write-Styled -Type Error -Message "No se pudo importar 'Microsoft.WinGet.Client'. Cambiando a método de reserva."
+                $wingetData = _Get-WingetInstalledData_Cli
+            }
+        }
+        return _Get-PackageStatusFromMaps -ManagerName 'Winget' -CatalogPackages $CatalogPackages -InstalledMap $wingetData.InstalledMap -UpgradableMap $wingetData.UpgradableMap -InstalledMapByName $wingetData.InstalledMapByName -UpgradableMapByName $wingetData.UpgradableMapByName
+    } catch {
+        Write-Styled -Type Error -Message "Fallo crítico al obtener la lista de paquetes de Winget: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+#endregion
+
 #region Package Action Helpers
+
+function _Invoke-PackageAction {
+    param(
+        [string]$Manager,
+        [string]$Action, # "Install", "Upgrade", "Uninstall"
+        [PSCustomObject]$Item
+    )
+
+    $provider = $script:PackageManagers[$Manager]
+    if (-not $provider) {
+        throw "Proveedor de paquetes desconocido: $Manager"
+    }
+
+    $commandTemplate = $provider.Commands[$Action]
+    $pkg = $Item.Package
+
+    # Reemplazar placeholders en la plantilla del comando
+    $argumentList = $commandTemplate -replace '\{installId\}', $pkg.installId
+
+    # Manejar parámetros especiales/opcionales
+    if ($commandTemplate -match '\{params\}') {
+        $paramString = ""
+        if ($pkg.PSObject.Properties.Match('special_params') -and $pkg.special_params) {
+            $paramString = "--params='$($pkg.special_params)'"
+        }
+        $argumentList = $argumentList -replace '\{params\}', $paramString
+    }
+
+    if ($commandTemplate -match '\{source\}') {
+        $sourceString = ""
+        if ($pkg.PSObject.Properties.Match('source') -and $pkg.source) {
+            $sourceString = "--source $($pkg.source)"
+        }
+        $argumentList = $argumentList -replace '\{source\}', $sourceString
+    }
+
+    # Limpiar espacios extra si los placeholders opcionales estaban vacíos
+    $argumentList = $argumentList -replace '\s+', ' ' | ForEach-Object { $_.Trim() }
+
+    _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable $provider.Executable -ArgumentList $argumentList -FailureStrings $provider.FailureStrings
+
+    # Tareas post-acción (solo para instalación y actualización)
+    if ($Action -in @('Install', 'Upgrade')) {
+        if ($pkg.PSObject.Properties.Match('postInstallConfig') -and $pkg.postInstallConfig) {
+            Invoke-PostInstallConfiguration -Package $pkg
+        }
+        if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
+    }
+}
 
 function _Invoke-ProcessPendingPackages {
     param(
@@ -303,7 +345,7 @@ function _Invoke-ProcessPendingPackages {
             if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $null } else { $script:wingetStatusCache = $null }
         } catch {
             Write-Styled -Type Error -Message "Ocurrió un error durante el procesamiento masivo para ${Manager}."
-            Pause-And-Return
+            Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para volver al menú."
         }
     } else {
         Write-Styled -Type Info -Message "No hay paquetes para instalar o actualizar para ${Manager}."
@@ -313,51 +355,17 @@ function _Invoke-ProcessPendingPackages {
 
 function _Install-Package {
     param([string]$Manager, [PSCustomObject]$Item)
-    $pkg = $Item.Package
-    if ($Manager -eq 'Chocolatey') {
-        $chocoArgs = @("install", $pkg.installId, "-y")
-        if ($pkg.special_params) { $chocoArgs += "--params='$($pkg.special_params)'" }
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
-    } else { # Winget
-        $wingetArgs = @("install", "--id", $pkg.installId, "--accept-package-agreements", "--accept-source-agreements")
-        if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
-    }
-
-    if ($pkg.PSObject.Properties.Match('postInstallConfig') -and $pkg.postInstallConfig) {
-        Invoke-PostInstallConfiguration -Package $pkg
-    }
-    if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
+    _Invoke-PackageAction -Manager $Manager -Action 'Install' -Item $Item
 }
 
 function _Uninstall-Package {
     param([string]$Manager, [PSCustomObject]$Item)
-    $pkg = $Item.Package
-    if ($Manager -eq 'Chocolatey') {
-        $chocoArgs = @("uninstall", $pkg.installId, "-y")
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
-    } else { # Winget
-        $wingetArgs = @("uninstall", "--id", $pkg.installId, "--silent")
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
-    }
+    _Invoke-PackageAction -Manager $Manager -Action 'Uninstall' -Item $Item
 }
 
 function _Update-Package {
     param([string]$Manager, [PSCustomObject]$Item)
-    $pkg = $Item.Package
-    if ($Manager -eq 'Chocolatey') {
-        $chocoArgs = @("upgrade", $pkg.installId, "-y")
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
-    } else { # Winget
-        # Winget upgrade is the same as install
-        $wingetArgs = @("install", "--id", $pkg.installId, "--accept-package-agreements", "--accept-source-agreements")
-        _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
-    }
-
-    if ($pkg.PSObject.Properties.Match('postInstallConfig') -and $pkg.postInstallConfig) {
-        Invoke-PostInstallConfiguration -Package $pkg
-    }
-    if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
+    _Invoke-PackageAction -Manager $Manager -Action 'Upgrade' -Item $Item
 }
 #endregion
 
@@ -426,13 +434,13 @@ function Invoke-SoftwareManagerUI {
     try {
         $catalogJson = Get-Content -Raw -Path $CatalogFile -Encoding UTF8 | ConvertFrom-Json
         if (-not (Test-SoftwareCatalog -CatalogData $catalogJson -CatalogFileName (Split-Path $CatalogFile -Leaf))) {
-            Pause-And-Return
+            Pause-And-Return -Message "`nEl catálogo de software no es válido. Presione Enter para volver."
             return
         }
         $catalogPackages = $catalogJson.items
     } catch {
         Write-Styled -Type Error -Message "Fallo CRÍTICO al leer o procesar '${CatalogFile}': $($_.Exception.Message)"
-        Pause-And-Return
+        Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para volver al menú."
         return
     }
 
@@ -452,7 +460,7 @@ function Invoke-SoftwareManagerUI {
 
         if ($null -eq $packageStatusList) {
             Write-Styled -Type Error -Message "No se pudo continuar debido a un error al obtener el estado de los paquetes."
-            Pause-And-Return
+            Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para volver al menú."
             return
         }
 
@@ -486,7 +494,7 @@ function Invoke-SoftwareManagerUI {
                 } else {
                     Write-Styled -Type Info -Message "Todos los paquetes del catálogo están actualizados."
                 }
-                Pause-And-Return
+                Pause-And-Return -Message "`nPresione Enter para volver al menú de paquetes."
             }
             'R' {
                 Set-Variable -Name $cacheVariableName -Value $null # Invalidar caché
@@ -581,7 +589,7 @@ function Invoke-SoftwareSearchAndInstall {
 
     if (-not $searchResult.Success -or $searchResult.Output -match "No package found matching input criteria") {
         Write-Styled -Type Error -Message "No se encontraron paquetes que coincidan con '$searchTerm'."
-        Pause-And-Return
+        Pause-And-Return -Message "`nPresione Enter para volver al menú."
         return
     }
 
@@ -595,7 +603,7 @@ function Invoke-SoftwareSearchAndInstall {
             Package     = [PSCustomObject]@{ installId = $idToInstall }
         }
         _Install-Package -Manager 'Winget' -Item $item
-        Pause-And-Return
+        Pause-And-Return -Message "`nOperación finalizada. Presione Enter para continuar."
     }
 }
 
@@ -610,7 +618,7 @@ function Invoke-Phase2_SoftwareMenu {
     $wingetCatalogFile = Join-Path $CatalogPath "winget_catalog.json"
     if (-not (Test-Path $chocoCatalogFile) -or -not (Test-Path $wingetCatalogFile)) {
         Write-Styled -Type Error -Message "No se encontraron los archivos de catálogo en '${CatalogPath}'."
-        Pause-And-Return
+        Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para volver al menú."
         return
     }
 
@@ -655,7 +663,7 @@ function Invoke-Phase2_SoftwareMenu {
                     # Invalidar ambas cachés después de una instalación masiva completa
                     $script:chocolateyStatusCache = $null
                     $script:wingetStatusCache = $null
-                    Pause-And-Return
+                    Pause-And-Return -Message "`nInstalación masiva completada. Presione Enter para volver al menú."
                 }
             }
             '0' {

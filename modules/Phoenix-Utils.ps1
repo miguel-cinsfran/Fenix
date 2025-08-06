@@ -139,7 +139,8 @@ function Invoke-JobWithTimeout {
         [string]$Activity = "Ejecutando operación en segundo plano...",
         [int]$TimeoutSeconds = 3600,
         [boolean]$IdleTimeoutEnabled = $true,
-        [int]$IdleTimeoutSeconds = 300
+        [int]$IdleTimeoutSeconds = 300,
+        [string]$ProgressRegex
     )
 
     $job = Start-Job -ScriptBlock $ScriptBlock
@@ -164,23 +165,18 @@ function Invoke-JobWithTimeout {
             $idleTimer.Restart() # Reiniciar temporizador de inactividad
             [void]$outputBuffer.Append($newData -join [System.Environment]::NewLine)
 
-            # --- Lógica de parseo de progreso ---
-            $lastLine = ($newData | Where-Object { $_ -match '(\d+)\s*%' } | Select-Object -Last 1)
-            if ($lastLine) {
-                $percent = -1
-                # Patrón para Chocolatey: "Progress: 25%"
-                if ($lastLine -match "Progress:\s*(\d+)%") {
+            # --- Lógica de parseo de progreso (genérica) ---
+            if ($ProgressRegex) {
+                # Buscar en todas las líneas nuevas, de abajo hacia arriba, la última que coincida.
+                $lastLineWithProgress = $newData | Where-Object { $_ -match $ProgressRegex } | Select-Object -Last 1
+                if ($lastLineWithProgress -and ($lastLineWithProgress -match $ProgressRegex)) {
+                    # El primer grupo de captura debe ser el número del porcentaje.
                     $percent = [int]$matches[1]
-                }
-                # Patrón para Winget y otros: "██████████ 100%"
-                elseif ($lastLine -match "\s(\d+)\s*%") {
-                    $percent = [int]$matches[1]
-                }
-
-                if ($percent -ne -1 -and $percent -ne $lastProgressPercent) {
-                    $lastProgressPercent = $percent
-                    $statusMessage = "Progreso: ${percent}% | Tiempo: $($overallTimer.Elapsed.ToString('hh\:mm\:ss'))"
-                    Write-Progress -Activity $Activity -Status $statusMessage -PercentComplete $percent
+                    if ($percent -ne -1 -and $percent -ne $lastProgressPercent) {
+                        $lastProgressPercent = $percent
+                        $statusMessage = "Progreso: ${percent}% | Tiempo: $($overallTimer.Elapsed.ToString('hh\:mm\:ss'))"
+                        Write-Progress -Activity $Activity -Status $statusMessage -PercentComplete $percent
+                    }
                 }
             }
         }
@@ -264,12 +260,13 @@ function Invoke-NativeCommand {
         [string]$ArgumentList,
         [string[]]$FailureStrings,
         [string]$Activity,
-        [boolean]$IdleTimeoutEnabled = $true
+        [boolean]$IdleTimeoutEnabled = $true,
+        [string]$ProgressRegex
     )
 
     $scriptBlock = [scriptblock]::Create("& `"$Executable`" $ArgumentList 2>&1; if (`$LASTEXITCODE -ne 0) { throw 'ExitCode: ' + `$LASTEXITCODE }")
 
-    $jobResult = Invoke-JobWithTimeout -ScriptBlock $scriptBlock -Activity $Activity -IdleTimeoutEnabled $IdleTimeoutEnabled
+    $jobResult = Invoke-JobWithTimeout -ScriptBlock $scriptBlock -Activity $Activity -IdleTimeoutEnabled $IdleTimeoutEnabled -ProgressRegex $ProgressRegex
 
     $outputString = $jobResult.Output -join "`n"
 
@@ -279,8 +276,28 @@ function Invoke-NativeCommand {
     }
 
     if ($jobResult.Error -match "ExitCode: (\d+)") {
-        $result.Success = $false
-        Write-Styled -Type Error -Message "El comando '$Executable' terminó con código de error: $($matches[1])."
+        $exitCode = $matches[1]
+
+        # El código 3010 es un reinicio pendiente, que no es un error sino un éxito con condición.
+        if ($exitCode -eq '3010') {
+            $result.Success = $true # Anular el fallo del trabajo para este código específico.
+            $global:RebootIsPending = $true
+            Write-Styled -Type Warn -Message "El comando '$Executable' solicita un REINICIO para completar la operación (código 3010)."
+        } else {
+            $result.Success = $false # Confirmar que es un fallo.
+            $baseMessage = "El comando '$Executable' terminó con código de error: $exitCode."
+            $extraHelp = ""
+
+            switch ($exitCode) {
+                '1603' { $extraHelp = "Este es un error genérico de instalación. Causas comunes: se requiere un reinicio, falta una dependencia (.NET), o hay problemas de permisos." }
+                '1618' { $extraHelp = "Otra instalación ya está en progreso. Espere a que termine o reinicie el equipo." }
+            }
+
+            Write-Styled -Type Error -Message $baseMessage
+            if ($extraHelp) {
+                Write-Styled -Type Info -Message "Sugerencia: $extraHelp"
+            }
+        }
     }
 
     # Incluso si el código de salida es 0, buscar cadenas de error en la salida
@@ -366,7 +383,7 @@ function Invoke-PostInstallConfiguration {
     if (-not $destinationPath) {
         Write-Styled -Type Error -Message "No se pudo encontrar una ruta de instalación válida para '$friendlyName' en ninguna de las siguientes ubicaciones:"
         $Package.configPaths | ForEach-Object { Write-Styled -Type Log -Message "- $_" }
-        Pause-And-Return
+        Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para continuar."
         return
     }
 
@@ -391,12 +408,12 @@ function Invoke-PostInstallConfiguration {
         }
 
         Write-Styled -Type Success -Message "La configuración para '$friendlyName' se ha aplicado correctamente."
-        Pause-And-Return
+        Pause-And-Return -Message "`nConfiguración aplicada. Presione Enter para continuar."
     } catch {
         Write-Styled -Type Error -Message "Ocurrió un error al aplicar la configuración para '$friendlyName'."
         Write-Styled -Type Log -Message "Ruta de origen: $sourceConfigDir"
         Write-Styled -Type Log -Message "Ruta de destino: $destinationPath"
         Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
-        Pause-And-Return
+        Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para continuar."
     }
 }

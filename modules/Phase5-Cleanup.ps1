@@ -132,13 +132,13 @@ function Invoke-Phase5_Cleanup {
     param([string]$CatalogPath)
     $cleanupCatalogFile = Join-Path $CatalogPath "system_cleanup.json"
     if (-not (Test-Path $cleanupCatalogFile)) {
-        Write-Styled -Type Error -Message "No se encontró el catálogo de limpieza en '$cleanupCatalogFile'."; Pause-And-Return; return
+        Write-Styled -Type Error -Message "No se encontró el catálogo de limpieza en '$cleanupCatalogFile'."; Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para volver al menú."; return
     }
 
     try {
         $tasks = (Get-Content -Raw -Path $cleanupCatalogFile -Encoding UTF8 | ConvertFrom-Json).items
     } catch {
-        Write-Styled -Type Error -Message "Fallo CRÍTICO al procesar '$cleanupCatalogFile'."; Pause-And-Return; return
+        Write-Styled -Type Error -Message "Fallo CRÍTICO al procesar '$cleanupCatalogFile'."; Pause-And-Return -Message "`nRevise el error anterior. Presione Enter para volver al menú."; return
     }
 
     $exitMenu = $false
@@ -161,6 +161,6 @@ function Invoke-Phase5_Cleanup {
             $actionTaken = $true # Pause even on error
         }
 
-        if ($actionTaken) { Pause-And-Return }
+        if ($actionTaken) { Pause-And-Return -Message "`nLimpieza completada. Presione Enter para volver al menú." }
     }
 }

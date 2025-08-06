@@ -89,7 +89,7 @@ function Invoke-Phase4_WSL {
                     Invoke-RestartPrompt
                 } else {
                     Write-Styled -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos."
-                    Pause-And-Return
+                    Pause-And-Return -Message "`nRevise el error de instalación de WSL. Presione Enter para continuar."
                 }
                 return
             }
@@ -114,5 +114,5 @@ function Invoke-Phase4_WSL {
     } catch {
         Write-Styled -Type Error -Message "Error fatal en la instalación de WSL: $($_.Exception.Message)"
     }
-    Pause-And-Return
+    Pause-And-Return -Message "`nPresione Enter para volver al menú principal."
 }
