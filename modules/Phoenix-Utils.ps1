@@ -170,18 +170,22 @@ function Invoke-JobWithTimeout {
             [void]$outputBuffer.Append($newData -join [System.Environment]::NewLine)
 
             # --- Lógica de parseo de progreso ---
-            # Buscar la última línea que contenga un porcentaje
-            $lastLine = ($newData | Where-Object { $_ -match '\d+\s*%' } | Select-Object -Last 1)
+            $lastLine = ($newData | Where-Object { $_ -match '(\d+)\s*%' } | Select-Object -Last 1)
             if ($lastLine) {
-                # Extraer el primer número que parece un porcentaje
-                if ($lastLine -match '(\d+)\s*%') {
+                $percent = -1
+                # Patrón para Chocolatey: "Progress: 25%"
+                if ($lastLine -match "Progress:\s*(\d+)%") {
                     $percent = [int]$matches[1]
-                    if ($percent -ne $lastProgressPercent) {
-                        $lastProgressPercent = $percent
-                        # Asegurar que el estado no sea muy largo para la barra de progreso
-                        $statusMessage = "Progreso: ${percent}% | Tiempo: $($overallTimer.Elapsed.ToString('hh\:mm\:ss'))"
-                        Write-Progress -Activity $Activity -Status $statusMessage -PercentComplete $percent
-                    }
+                }
+                # Patrón para Winget y otros: "██████████ 100%"
+                elseif ($lastLine -match "\s(\d+)\s*%") {
+                    $percent = [int]$matches[1]
+                }
+
+                if ($percent -ne -1 -and $percent -ne $lastProgressPercent) {
+                    $lastProgressPercent = $percent
+                    $statusMessage = "Progreso: ${percent}% | Tiempo: $($overallTimer.Elapsed.ToString('hh\:mm\:ss'))"
+                    Write-Progress -Activity $Activity -Status $statusMessage -PercentComplete $percent
                 }
             }
         }

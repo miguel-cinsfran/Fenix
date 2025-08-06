@@ -217,11 +217,11 @@ function _Install-Package {
     param([string]$Manager, [PSCustomObject]$Item)
     $pkg = $Item.Package
     if ($Manager -eq 'Chocolatey') {
-        $chocoArgs = @("install", $pkg.installId, "-y", "--no-progress")
+        $chocoArgs = @("install", $pkg.installId, "-y")
         if ($pkg.special_params) { $chocoArgs += "--params='$($pkg.special_params)'" }
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
     } else { # Winget
-        $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
+        $wingetArgs = @("install", "--id", $pkg.installId, "--accept-package-agreements", "--accept-source-agreements")
         if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
@@ -244,11 +244,11 @@ function _Update-Package {
     param([string]$Manager, [PSCustomObject]$Item)
     $pkg = $Item.Package
     if ($Manager -eq 'Chocolatey') {
-        $chocoArgs = @("upgrade", $pkg.installId, "-y", "--no-progress")
+        $chocoArgs = @("upgrade", $pkg.installId, "-y")
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
     } else { # Winget
         # Winget upgrade is the same as install
-        $wingetArgs = @("install", "--id", $pkg.installId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
+        $wingetArgs = @("install", "--id", $pkg.installId, "--accept-package-agreements", "--accept-source-agreements")
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
     if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
