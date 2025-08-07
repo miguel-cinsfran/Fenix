@@ -1,12 +1,12 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 6 para el saneamiento y la calidad del código.
 .DESCRIPTION
     Proporciona una interfaz interactiva para analizar y corregir problemas comunes
     de formato y codificación en ficheros de texto dentro de un proyecto.
 .NOTES
-    Versión: 3.0 (Integrado en Fénix)
-    Autor: miguel-cinsfran & Jules
+    Versión: 3.0
+    Autor: miguel-cinsfran
 #>
 
 #region Configuración y Estado
@@ -25,27 +25,27 @@ $global:CodeQualityConfig = @{
 # Diccionario de reparación de caracteres corruptos.
 # Inmune a la corrupción del propio script al construir los caracteres desde sus códigos.
 $global:CorruptionMap = @{
-    # --- MINÚSCULAS ---
+    # --- MINÃšSCULAS ---
     "$([char]195)$([char]161)" = "$([char]225)"; # á -> á
     "$([char]195)$([char]169)" = "$([char]233)"; # é -> é
     "$([char]195)$([char]173)" = "$([char]237)"; # í -> í
     "$([char]195)$([char]179)" = "$([char]243)"; # ó -> ó
     "$([char]195)$([char]186)" = "$([char]250)"; # ú -> ú
     "$([char]195)$([char]177)" = "$([char]241)"; # ñ -> ñ
-    # --- MAYÚSCULAS ---
-    "$([char]195)$([char]129)" = "$([char]193)"; # Ã  -> Á
-    "$([char]195)$([char]137)" = "$([char]201)"; # Ã‰ -> É
-    "$([char]195)$([char]141)" = "$([char]205)"; # Ã  -> Í
-    "$([char]195)$([char]147)" = "$([char]211)"; # Ã“ -> Ó
-    "$([char]195)$([char]154)" = "$([char]218)"; # Ãš -> Ú
-    "$([char]195)$([char]145)" = "$([char]209)"; # Ã‘ -> Ñ
+    # --- MAYÃšSCULAS ---
+    "$([char]195)$([char]129)" = "$([char]193)"; # Ãƒ  -> Á
+    "$([char]195)$([char]137)" = "$([char]201)"; # Ãƒâ€° -> Ã‰
+    "$([char]195)$([char]141)" = "$([char]205)"; # Ãƒ  -> Í
+    "$([char]195)$([char]147)" = "$([char]211)"; # Ãƒâ€œ -> Ã“
+    "$([char]195)$([char]154)" = "$([char]218)"; # ÃƒÅ¡ -> Ãš
+    "$([char]195)$([char]145)" = "$([char]209)"; # Ãƒâ€˜ -> Ã‘
     # --- SIGNOS Y OTROS ---
     "$([char]194)$([char]191)" = "$([char]191)"; # ¿ -> ¿
     "$([char]194)$([char]161)" = "$([char]161)"; # ¡ -> ¡
-    "$([char]226)$([char]128)$([char]156)" = "$([char]8220)"; # â€œ -> “
-    "$([char]226)$([char]128)$([char]157)" = "$([char]8221)"; # â€  -> ”
-    "$([char]226)$([char]128)$([char]153)" = "$([char]8217)"; # â€™ -> ’
-    "$([char]226)$([char]128)$([char]166)" = "$([char]8230)"; # â€¦ -> …
+    "$([char]226)$([char]128)$([char]156)" = "$([char]8220)"; # Ã¢â‚¬Å“ -> â€œ
+    "$([char]226)$([char]128)$([char]157)" = "$([char]8221)"; # Ã¢â‚¬  -> â€
+    "$([char]226)$([char]128)$([char]153)" = "$([char]8217)"; # Ã¢â‚¬â„¢ -> â€™
+    "$([char]226)$([char]128)$([char]166)" = "$([char]8230)"; # Ã¢â‚¬Â¦ -> â€¦
 }
 #endregion
 
