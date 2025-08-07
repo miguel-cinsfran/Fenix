@@ -253,15 +253,29 @@ Seleccione una acción para '$($selectedDistro.Name)':
             '1' { # Desinstalar
                 Write-PhoenixStyledOutput -Type Consent -Message "¡ADVERTENCIA! Esto eliminará permanentemente la distribución '$($selectedDistro.Name)' y todos sus datos."
                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?") -eq 'S') {
-                    Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--unregister $($selectedDistro.Name)" -Activity "Desinstalando $($selectedDistro.Name)"
-                    Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' ha sido desinstalada."
+                    # Se añaden comillas al nombre de la distro para manejar nombres con espacios.
+                    # Se captura el resultado para verificar si la operación tuvo éxito.
+                    $result = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--unregister `"$($selectedDistro.Name)`"" -Activity "Desinstalando $($selectedDistro.Name)"
+                    if ($result.Success) {
+                        Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' ha sido desinstalada."
+                    } else {
+                        Write-PhoenixStyledOutput -Type Error -Message "Falló la desinstalación de '$($selectedDistro.Name)'."
+                        Write-PhoenixStyledOutput -Type Log -Message "Salida del comando:"
+                        # Mostrar la salida del comando para que el usuario pueda diagnosticar el problema.
+                        $result.Output | ForEach-Object { Write-PhoenixStyledOutput -Type Log -Message $_ }
+                    }
                     Request-Continuation
                     break # Romper el switch para forzar un refresco de la lista.
                 }
             }
             '2' { # Establecer como predeterminada
-                Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--set-default $($selectedDistro.Name)" -Activity "Estableciendo $($selectedDistro.Name) como predeterminada"
-                Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' es ahora la distribución predeterminada."
+                # Se añaden comillas al nombre de la distro para manejar nombres con espacios.
+                $result = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--set-default `"$($selectedDistro.Name)`"" -Activity "Estableciendo $($selectedDistro.Name) como predeterminada"
+                if ($result.Success) {
+                    Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' es ahora la distribución predeterminada."
+                } else {
+                    Write-PhoenixStyledOutput -Type Error -Message "No se pudo establecer la distribución predeterminada."
+                }
                 Request-Continuation
             }
             '3' { # Actualizar paquetes
@@ -270,7 +284,8 @@ Seleccione una acción para '$($selectedDistro.Name)':
                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
                     Write-PhoenixStyledOutput -Type Info -Message "Lanzando el proceso de actualización para '$($selectedDistro.Name)'. Siga las instrucciones."
                     try {
-                        Start-Process wsl -ArgumentList "-d $($selectedDistro.Name) -- sudo apt-get update && sudo apt-get upgrade -y" -Wait -NoNewWindow
+                        # Se añaden comillas al nombre de la distro para el argumento -d.
+                        Start-Process wsl -ArgumentList "-d `"$($selectedDistro.Name)`" -- sudo apt-get update && sudo apt-get upgrade -y" -Wait -NoNewWindow
                         Write-PhoenixStyledOutput -Type Success -Message "El proceso de actualización ha finalizado."
                     } catch {
                          Write-PhoenixStyledOutput -Type Error -Message "No se pudo iniciar el proceso de actualización. Error: $($_.Exception.Message)"
