@@ -135,7 +135,7 @@ function Invoke-AuditPhase {
         Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error al generar el informe de auditoría: $($_.Exception.Message)"
     }
 
-    Request-Continuation
+    Request-Continuation -Message "Presione Enter para volver al menú principal..."
 }
 
 # Exportar únicamente las funciones destinadas al consumo público para evitar la

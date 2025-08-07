@@ -27,7 +27,7 @@ try {
     $Global:Settings = Import-PowerShellDataFile -Path $configFile
 } catch {
     Write-Error "No se pudo cargar el fichero de configuración 'settings.psd1'. El script no puede continuar."
-    Read-Host "Presione Enter para salir."; exit
+    Request-Continuation -Message "Presione Enter para salir."; exit
 }
 
 # Construir rutas absolutas basadas en la configuración
@@ -64,7 +64,7 @@ try {
 } catch {
     Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$modulesPath'." -ForegroundColor Red
     Write-Host "Error original: $($_.Exception.Message)" -ForegroundColor Red
-    Read-Host "Presione Enter para salir."
+    Request-Continuation -Message "Presione Enter para salir."
     exit
 }
 
@@ -76,7 +76,7 @@ Write-Host # Add a newline for spacing
 # SECCIÓN 3.5: VERIFICACIÓN INICIAL DE INTERNET
 if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
     Write-PhoenixStyledOutput -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."
-    Read-Host "Presione Enter para salir."
+    Request-Continuation -Message "Presione Enter para salir."
     exit
 }
 
@@ -90,7 +90,7 @@ Write-Host
 Write-PhoenixStyledOutput -Type Warn -Message "ADVERTENCIA: Ejecute este script bajo su propio riesgo. Asegúrese de entender lo que hace cada fase."
 Write-Host
 
-$consent = (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "¿Acepta los riesgos y desea continuar? (S/N)")[0]
+$consent = (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "¿Acepta los riesgos y desea continuar?" -IsYesNoPrompt)[0]
 if ($consent -ne 'S') {
     Write-PhoenixStyledOutput -Type Error -Message "Consentimiento no otorgado. El script se cerrará."
     Start-Sleep -Seconds 2
@@ -99,7 +99,7 @@ if ($consent -ne 'S') {
 
 # SECCIÓN 5: BUCLE DE CONTROL PRINCIPAL
 $mainMenuOptions = @(
-    @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-OneDrivePhase; Request-Continuation } },
+    @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-OneDrivePhase } },
     @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-SoftwareMenuPhase -CatalogPath $catalogsPath } },
     @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-TweaksPhase -CatalogPath $tweaksCatalog } },
     @{ Description = "Ejecutar FASE 4: Instalación de WSL2"; Action = { Invoke-WslPhase } },
@@ -119,7 +119,7 @@ function Show-MainMenu {
     }
 
     Write-PhoenixStyledOutput -Type Step -Message "[R] Refrescar Menú"
-    Write-PhoenixStyledOutput -Type Step -Message "[Q] Salir"
+    Write-PhoenixStyledOutput -Type Step -Message "[0] Salir"
     Write-Host
 }
 
@@ -131,24 +131,23 @@ try {
         $firstRun = $false
 
         $numericChoices = 1..$mainMenuOptions.Count
-        $validChoices = @($numericChoices) + @('R', 'Q')
-        $choices = Request-MenuSelection -ValidChoices $validChoices
+        $validChoices = @($numericChoices) + @('R', '0')
+        $choices = Request-MenuSelection -ValidChoices $validChoices -AllowMultipleSelections:$false
+        if ($choices.Count -eq 0) { continue }
+        $choice = $choices[0]
 
-        if ($choices -contains 'Q') { $exitMainMenu = $true; continue }
-        if ($choices -contains 'R') { Clear-Host; continue }
 
-        # Ordenar las selecciones numéricas para una ejecución predecible.
-        $numericActions = $choices | ForEach-Object { [int]$_ } | Sort-Object
+        if ($choice -eq '0') { $exitMainMenu = $true; continue }
+        if ($choice -eq 'R') { Clear-Host; continue }
 
-        foreach ($choice in $numericActions) {
-            $chosenIndex = $choice - 1
-            if ($chosenIndex -ge 0 -and $chosenIndex -lt $mainMenuOptions.Count) {
-                $chosenOption = $mainMenuOptions[$chosenIndex]
-                & $chosenOption.Action
-                if ($global:RebootIsPending) {
-                    Confirm-SystemRestart
-                    $global:RebootIsPending = $false
-                }
+        # Como ya no se permiten selecciones múltiples, la lógica se simplifica.
+        $chosenIndex = [int]$choice - 1
+        if ($chosenIndex -ge 0 -and $chosenIndex -lt $mainMenuOptions.Count) {
+            $chosenOption = $mainMenuOptions[$chosenIndex]
+            & $chosenOption.Action
+            if ($global:RebootIsPending) {
+                Confirm-SystemRestart
+                $global:RebootIsPending = $false
             }
         }
     }
@@ -157,7 +156,7 @@ try {
 } catch {
     Write-PhoenixStyledOutput -Type Error -Message "El script ha encontrado un error fatal inesperado y no puede continuar."
     Write-PhoenixStyledOutput -Type Log -Message "Error: $($_.Exception.Message)"
-    Read-Host "Presione Enter para salir."
+    Request-Continuation -Message "Presione Enter para salir."
 } finally {
     Show-PhoenixHeader -Title "PROCESO FINALIZADO" -NoClear
     Write-PhoenixStyledOutput -Type Info -Message "`nEl log completo de la sesión se ha guardado en: $logFile"; Write-Host

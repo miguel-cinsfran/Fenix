@@ -93,18 +93,22 @@ function Show-PhoenixStandardMenu {
         $validChoices += $key
     }
 
-    return Request-MenuSelection -ValidChoices $validChoices -PromptMessage $PromptMessage
+    return Request-MenuSelection -ValidChoices $validChoices -PromptMessage $PromptMessage -AllowMultipleSelections
 }
 
 function Request-Continuation {
-    param([string]$Message = "`nPresione Enter para continuar...")
-    Write-PhoenixStyledOutput -Type Consent -Message $Message -NoNewline
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Message
+    )
+    Write-Host
+    Write-PhoenixStyledOutput -Type Consent -Message "$Message" -NoNewline
     Read-Host | Out-Null
 }
 
 function Confirm-SystemRestart {
     Write-PhoenixStyledOutput -Type Warn -Message "Se requiere un reinicio para aplicar completamente los cambios."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?")[0] -eq 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?" -IsYesNoPrompt)[0] -eq 'S') {
         Write-PhoenixStyledOutput -Type Info -Message "Reiniciando el equipo en 5 segundos..."
         Start-Sleep -Seconds 5
         Restart-Computer -Force
@@ -116,38 +120,56 @@ function Confirm-SystemRestart {
 function Request-MenuSelection {
     param(
         [string]$PromptMessage = "Seleccione una opción",
-        [string[]]$ValidChoices
+        [string[]]$ValidChoices,
+        [switch]$AllowMultipleSelections,
+        [switch]$IsYesNoPrompt
     )
 
     try {
         while ($true) {
-            $input = (Read-Host -Prompt "  -> $PromptMessage (se permiten múltiples, ej: 1,3,5-8)").Trim().ToUpper()
+            $fullPrompt = "  -> $PromptMessage"
+            if ($IsYesNoPrompt) {
+                $fullPrompt += " (S/N)"
+            }
+            elseif ($AllowMultipleSelections) {
+                $fullPrompt += " (se permiten múltiples, ej: 1,3,5-8)"
+            }
+            $fullPrompt += ": "
+
+            $input = (Read-Host -Prompt $fullPrompt).Trim().ToUpper()
             if ([string]::IsNullOrWhiteSpace($input)) { continue }
 
-            # Alias Q -> S si S es una opción válida, para consistencia con el menú principal.
-            if ($input -eq 'Q' -and $ValidChoices -contains 'S') {
-                $input = 'S'
+            # Normalización de entrada para S/N
+            if ($IsYesNoPrompt) {
+                if ('SI', 'S', 'Y', 'YES' -contains $input) { $input = 'S' }
+                elseif ('NO', 'N' -contains $input) { $input = 'N' }
             }
 
             $expandedChoices = [System.Collections.Generic.List[string]]::new()
             $validInput = $true
 
-            # Dividir la entrada por comas y procesar cada parte.
-            $parts = $input -split ','
-            foreach ($part in $parts) {
-                $part = $part.Trim()
-                if ($part -match '(\w+)-(\w+)') { # Es un rango como '5-8'
-                    $start = $matches[1]; $end = $matches[2]
-                    # Validar que los rangos son numéricos y en el orden correcto.
-                    if ($start -match '^\d+$' -and $end -match '^\d+$' -and [int]$start -le [int]$end) {
-                        ([int]$start..[int]$end) | ForEach-Object { $expandedChoices.Add("$_") }
-                    } else {
-                        $validInput = $false; break
+            if ($AllowMultipleSelections) {
+                 # Dividir la entrada por comas y procesar cada parte.
+                $parts = $input -split ','
+                foreach ($part in $parts) {
+                    $part = $part.Trim()
+                    if ($part -match '(\w+)-(\w+)') { # Es un rango como '5-8'
+                        $start = $matches[1]; $end = $matches[2]
+                        # Validar que los rangos son numéricos y en el orden correcto.
+                        if ($start -match '^\d+$' -and $end -match '^\d+$' -and [int]$start -le [int]$end) {
+                            ([int]$start..[int]$end) | ForEach-Object { $expandedChoices.Add("$_") }
+                        } else {
+                            $validInput = $false; break
+                        }
+                    } else { # Es un solo valor
+                        $expandedChoices.Add($part)
                     }
-                } else { # Es un solo valor
-                    $expandedChoices.Add($part)
                 }
+            } else {
+                # Si no se permiten múltiples selecciones, tomar solo la primera "palabra"
+                $expandedChoices.Add(($input -split ' ')[0])
             }
+
 
             if (-not $validInput) {
                 Write-PhoenixStyledOutput -Type Error -Message "Rango no válido detectado. Use un formato como '5-8'."; Start-Sleep -s 1; Write-Host; continue
@@ -167,6 +189,10 @@ function Request-MenuSelection {
             if ($invalidChoices.Count -gt 0) {
                 Write-PhoenixStyledOutput -Type Error -Message "Opciones no válidas: $($invalidChoices -join ', ')"; Start-Sleep -s 1; Write-Host
             } else {
+                if (-not $AllowMultipleSelections -and $finalChoices.Count -gt 1) {
+                    # Si no se permiten múltiples selecciones, devolver solo la primera válida.
+                    return $finalChoices[0]
+                }
                 return $finalChoices.ToArray()
             }
         }
@@ -410,7 +436,7 @@ function Start-PostInstallConfiguration {
     }
 
     Write-PhoenixStyledOutput -Type Consent -Message "El paquete '$friendlyName' tiene una configuración de productividad/accesibilidad disponible."
-    if ('N' -eq (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage '¿Desea aplicar esta configuración ahora?')[0]) {
+    if ('N' -eq (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage '¿Desea aplicar esta configuración ahora?' -IsYesNoPrompt)[0]) {
         Write-PhoenixStyledOutput -Type Info -Message "Se omitió la aplicación de la configuración para '$friendlyName'."
         return
     }

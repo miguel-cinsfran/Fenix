@@ -135,7 +135,7 @@ function Invoke-SoftwareSearchAndInstall {
 
     if (-not $searchResult.Success -or $searchResult.Output -match "No package found matching input criteria") {
         Write-PhoenixStyledOutput -Type Error -Message "No se encontraron paquetes que coincidan con '$searchTerm'."
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para continuar..."
         return
     }
 
@@ -195,7 +195,7 @@ function Invoke-TweaksPhase {
         $tweaks = $catalogJson.items
     } catch {
         Write-PhoenixStyledOutput -Type Error -Message "Fallo CRÍTICO al leer o procesar el catálogo de tweaks: $($_.Exception.Message)"
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú principal..."
         return
     }
 
@@ -249,7 +249,7 @@ function Invoke-TweaksPhase {
             $items = $tweakStatusList | Where-Object { $_.Status -eq 'Aplicado' }
             if ($items.Count -eq 0) { Write-PhoenixStyledOutput -Type Info -Message "No hay ajustes aplicados para revertir."; Start-Sleep -Seconds 2 }
             else {
-                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?")[0] -eq 'S') {
+                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?" -IsYesNoPrompt)[0] -eq 'S') {
                     foreach($item in $items) { Invoke-TweakAction -Action "Revert" -Tweak $item.Tweak }
                     $actionTaken = $true
                  }
@@ -265,13 +265,13 @@ function Invoke-TweaksPhase {
                 Invoke-TweakAction -Action "Apply" -Tweak $selectedItem.Tweak
                 $actionTaken = $true
             } elseif ($selectedItem.Status -eq 'Aplicado') {
-                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?") -eq 'S') {
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?" -IsYesNoPrompt)[0] -eq 'S') {
                     Invoke-TweakAction -Action "Revert" -Tweak $selectedItem.Tweak
                     $actionTaken = $true
                 }
             } else {
                 if ($selectedItem.Status -eq 'Aplicado (No Reversible)') {
-                    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?") -eq 'S') {
+                    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?" -IsYesNoPrompt)[0] -eq 'S') {
                         Invoke-SoftwareSearchAndInstall
                         $actionTaken = $true
                     }

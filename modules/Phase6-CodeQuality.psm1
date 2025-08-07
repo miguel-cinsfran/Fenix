@@ -208,7 +208,7 @@ function Show-CodeQualityRuleMenu {
         Write-PhoenixStyledOutput -Type Step -Message "[0] Guardar y Volver"
 
         $validChoices = 0..($rules.Count + 3)
-        $choice = Request-MenuSelection -ValidChoices $validChoices -PromptMessage "Seleccione una opción para modificar"
+        $choice = (Request-MenuSelection -ValidChoices $validChoices -PromptMessage "Seleccione una opción para modificar" -AllowMultipleSelections:$false)[0]
 
         switch ($choice) {
             '0' { $exitMenu = $true; continue }
@@ -246,13 +246,13 @@ function Start-CodeQualityAnalysisAndFix {
     $filesToFix = Get-CodeQualityIssue -Config $global:CodeQualityConfig
 
     if ($null -eq $filesToFix) { # Caso de no encontrar ficheros
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú..."
         return
     }
 
     if ($filesToFix.Count -eq 0) {
         Write-PhoenixStyledOutput -Type Success -Message "¡Análisis completo! Todos los ficheros cumplen con los estándares configurados."
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú..."
         return
     }
 
@@ -261,7 +261,7 @@ function Start-CodeQualityAnalysisAndFix {
     $filesToFix | ForEach-Object { Write-PhoenixStyledOutput -Type Info -Message "  - $($_.Path) ($($_.Reason))" }
     Write-Host
 
-    $consent = Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "El script aplicará las correcciones configuradas. ¿Desea proceder? (S/N)"
+    $consent = (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "El script aplicará las correcciones configuradas. ¿Desea proceder?" -IsYesNoPrompt)[0]
     if ($consent -ne 'S') {
         Write-PhoenixStyledOutput -Type Error -Message "Operación cancelada por el usuario."
         Start-Sleep -Seconds 2 # Pausa breve para leer el mensaje antes de volver al menú.
@@ -269,7 +269,7 @@ function Start-CodeQualityAnalysisAndFix {
     }
 
     Start-CodeQualitySanitization -FilesToProcess $filesToFix -Config $global:CodeQualityConfig
-    Request-Continuation
+    Request-Continuation -Message "Presione Enter para volver al menú..."
 }
 #endregion
 
@@ -281,7 +281,7 @@ function Invoke-CodeQualityPhase {
         $menuOptions = @(
             @{ Description = "Analizar y Sanear Directorio"; Action = { Start-CodeQualityAnalysisAndFix } },
             @{ Description = "Configurar Reglas de Saneamiento"; Action = { Show-CodeQualityRuleMenu } },
-            @{ Description = "Ver Configuración Actual"; Action = { Show-CodeQualityConfiguration; Request-Continuation } }
+            @{ Description = "Ver Configuración Actual"; Action = { Show-CodeQualityConfiguration; Request-Continuation -Message "Presione Enter para volver al menú..." } }
         )
 
         for ($i = 0; $i -lt $menuOptions.Count; $i++) {
@@ -290,7 +290,7 @@ function Invoke-CodeQualityPhase {
         Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
         Write-Host
 
-        $choice = Request-MenuSelection -ValidChoices @('1', '2', '3', '0')
+        $choice = (Request-MenuSelection -ValidChoices @('1', '2', '3', '0') -AllowMultipleSelections:$false)[0]
 
         switch ($choice) {
             '0' { $exitMenu = $true }

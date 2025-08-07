@@ -48,7 +48,7 @@ function Start-PendingPackageProcessing {
             Clear-PackageStatusCache -Manager $Manager
         } catch {
             Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error durante el procesamiento masivo para ${Manager}."
-            Request-Continuation
+            Request-Continuation -Message "Presione Enter para continuar..."
         }
     } else {
         Write-PhoenixStyledOutput -Type Info -Message "No hay paquetes para instalar o actualizar para ${Manager}."
@@ -98,7 +98,7 @@ function Show-SinglePackageMenu {
             Write-PhoenixStyledOutput -Type Consent -Message "[$key] $($menuOptions[$key])"
         }
 
-        $promptChoices = Request-MenuSelection -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" })
+        $promptChoices = Request-MenuSelection -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" }) -AllowMultipleSelections:$false
         if ($promptChoices.Count -eq 0) { continue }
         $choice = $promptChoices[0]
 
@@ -117,7 +117,7 @@ function Show-SinglePackageMenu {
                     $exitMenu = $true
                 }
                 'D' {
-                    $confirmChoice = (Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea desinstalar $($Item.DisplayName)?")
+                    $confirmChoice = (Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea desinstalar $($Item.DisplayName)?" -IsYesNoPrompt)
                     if ($confirmChoice[0] -eq 'S') {
                         if ($Manager -eq 'Chocolatey') { Uninstall-ChocoPackage -Item $Item }
                         else { Uninstall-WingetPackage -Item $Item }
@@ -129,7 +129,7 @@ function Show-SinglePackageMenu {
             }
         } catch {
             Write-PhoenixStyledOutput -Type Error -Message "La operación del paquete falló: $($_.Exception.Message)"
-            Request-Continuation
+            Request-Continuation -Message "Presione Enter para continuar..."
         }
     }
 }
@@ -151,17 +151,17 @@ function Show-SoftwareManagerUI {
         # Validar que el JSON es sintácticamente correcto.
         if (-not (Test-JsonFile -Path $CatalogFile)) {
             Write-PhoenixStyledOutput -Type Error -Message "El fichero de catálogo '$CatalogFile' contiene JSON inválido."
-            Request-Continuation; return
+            Request-Continuation -Message "Presione Enter para continuar..."; return
         }
 
         # La validación de la estructura del catálogo es crucial.
         if (-not (Test-SoftwareCatalogIntegrity -CatalogData $catalogJson -CatalogFileName (Split-Path $CatalogFile -Leaf))) {
-            Request-Continuation; return
+            Request-Continuation -Message "Presione Enter para continuar..."; return
         }
         $catalogPackages = $catalogJson.items
     } catch {
         Write-PhoenixStyledOutput -Type Error -Message "Fallo CRÍTICO al leer o procesar '${CatalogFile}': $($_.Exception.Message)"
-        Request-Continuation; return
+        Request-Continuation -Message "Presione Enter para continuar..."; return
     }
 
     $cacheVariableName = "script:${Manager}StatusCache"
@@ -182,7 +182,7 @@ function Show-SoftwareManagerUI {
 
         if ($null -eq $packageStatusList) {
             Write-PhoenixStyledOutput -Type Error -Message "No se pudo continuar debido a un error al obtener el estado de los paquetes."
-            Request-Continuation; return
+            Request-Continuation -Message "Presione Enter para continuar..."; return
         }
 
         $menuItems = $packageStatusList | ForEach-Object {
@@ -217,7 +217,7 @@ function Show-SoftwareManagerUI {
             } else {
                 Write-PhoenixStyledOutput -Type Info -Message "Todos los paquetes del catálogo están actualizados."
             }
-            Request-Continuation
+            Request-Continuation -Message "Presione Enter para volver al menú..."
             continue
         }
 
@@ -242,7 +242,7 @@ function Test-Phase2Prerequisites {
     if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
         Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
         Write-PhoenixStyledOutput -Type Consent -Message "El gestor de paquetes Chocolatey no está instalado y es requerido para esta fase."
-        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?") -eq 'S') {
+        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?" -IsYesNoPrompt)[0] -eq 'S') {
             Write-PhoenixStyledOutput -Type Info -Message "Instalando Chocolatey... Esto puede tardar unos minutos."
             try {
                 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
@@ -273,7 +273,7 @@ function Test-Phase2Prerequisites {
     if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
         Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
         Write-PhoenixStyledOutput -Type Consent -Message "El módulo de PowerShell para Winget es recomendado para una operación robusta."
-        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?") -eq 'S') {
+        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?" -IsYesNoPrompt)[0] -eq 'S') {
             Write-PhoenixStyledOutput -Type Info -Message "Instalando módulo 'Microsoft.WinGet.Client'..."
             try {
                 Install-Module -Name Microsoft.WinGet.Client -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
@@ -292,7 +292,7 @@ function Test-Phase2Prerequisites {
     }
 
     if (-not $allChecksPassed) {
-        Request-Continuation -Message "Una o más dependencias críticas no fueron satisfechas. Volviendo al menú principal."
+        Request-Continuation -Message "Una o más dependencias críticas no fueron satisfechas. Presione Enter para volver al menú principal."
     }
     return $allChecksPassed
 }
@@ -308,14 +308,14 @@ function Invoke-SoftwareMenuPhase {
         Write-PhoenixStyledOutput -Type Error -Message "No se pudo cargar un módulo de gestor de paquetes. Esto es un error fatal."
         Write-PhoenixStyledOutput -Type Log -Message "Error: $($_.Exception.Message)"
         Write-PhoenixStyledOutput -Type Log -Message "Detalles: $($_.ToString())"
-        Request-Continuation; return
+        Request-Continuation -Message "Presione Enter para continuar..."; return
     }
 
     $chocoCatalogFile = Join-Path $CatalogPath "chocolatey_catalog.json"
     $wingetCatalogFile = Join-Path $CatalogPath "winget_catalog.json"
     if (-not (Test-Path $chocoCatalogFile) -or -not (Test-Path $wingetCatalogFile)) {
         Write-PhoenixStyledOutput -Type Error -Message "No se encontraron los archivos de catálogo en '${CatalogPath}'."
-        Request-Continuation; return
+        Request-Continuation -Message "Presione Enter para continuar..."; return
     }
 
     $exitSubMenu = $false
@@ -327,9 +327,9 @@ function Invoke-SoftwareMenuPhase {
         Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
         Write-Host
 
-        $choices = Request-MenuSelection -ValidChoices @('1', '2', '3', '0')
+        $choices = Request-MenuSelection -ValidChoices @('1', '2', '3', '0') -AllowMultipleSelections:$false
         if ($choices.Count -eq 0) { continue }
-        $choice = $choices[0] # Solo tiene sentido una opción a la vez en este menú.
+        $choice = $choices[0]
 
         switch ($choice) {
             '1' {
@@ -339,7 +339,7 @@ function Invoke-SoftwareMenuPhase {
                 Show-SoftwareManagerUI -Manager 'Winget' -CatalogFile $wingetCatalogFile
             }
             '3' {
-                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Instalar todos los paquetes de AMBOS catálogos?") -eq 'S') {
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Instalar todos los paquetes de AMBOS catálogos?" -IsYesNoPrompt)[0] -eq 'S') {
                     # Chocolatey
                     Show-PhoenixHeader -Title "Instalación Masiva: Chocolatey"
                     $chocoCatalogPackages = (Get-Content -Raw -Path $chocoCatalogFile -Encoding UTF8 | ConvertFrom-Json).items
@@ -354,7 +354,7 @@ function Invoke-SoftwareMenuPhase {
 
                     Clear-PackageStatusCache -Manager 'Chocolatey'
                     Clear-PackageStatusCache -Manager 'Winget'
-                    Request-Continuation
+                    Request-Continuation -Message "Presione Enter para volver al menú..."
                 }
             }
             '0' { $exitSubMenu = $true }

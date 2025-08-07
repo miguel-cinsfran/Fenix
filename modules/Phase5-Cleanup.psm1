@@ -82,7 +82,7 @@ function _Invoke-CleanupTask-AnalyzeProcesses {
 function _Invoke-CleanupTask-SetDNS {
     param($Task)
     Write-PhoenixStyledOutput -Type Info -Message "Los servidores DNS públicos pueden ofrecer mayor velocidad y privacidad."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?")[0] -ne 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?" -IsYesNoPrompt)[0] -ne 'S') {
         Write-PhoenixStyledOutput -Type Skip -Message "Operación cancelada por el usuario."
         return
     }
@@ -122,7 +122,7 @@ function _Invoke-CleanupTask-RecycleBinCleanup {
         else { $sizeFormatted = "{0:N0} KB" -f ($totalSize / 1KB) }
 
         $prompt = "La Papelera contiene $itemCount elemento(s) (aprox. $sizeFormatted). ¿Confirma que desea vaciarla permanentemente?"
-        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage $prompt)[0] -eq 'S') {
+        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage $prompt -IsYesNoPrompt)[0] -eq 'S') {
             # Usar Clear-RecycleBin, que es el cmdlet estándar.
             # -ErrorAction SilentlyContinue evita que errores en ficheros individuales (ej. bloqueados) detengan el proceso
             # o muestren un error feo si la mayoría de ficheros se borran bien.
@@ -154,7 +154,7 @@ function _Invoke-CleanupTask-WindowsUpdateCleanup {
     param($Task)
     Write-PhoenixStyledOutput -Type SubStep -Message $Task.description
     Write-PhoenixStyledOutput -Type Warn -Message "Esta operación puede tardar mucho tiempo."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea proceder con la limpieza profunda?")[0] -eq 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea proceder con la limpieza profunda?" -IsYesNoPrompt)[0] -eq 'S') {
         $result = Invoke-NativeCommandWithOutputCapture -Executable "Dism.exe" -ArgumentList "/Online /English /Cleanup-Image /StartComponentCleanup /ResetBase" -FailureStrings "Error:" -Activity "Limpiando archivos de Windows Update"
         if ($result.Success) {
             Write-PhoenixStyledOutput -Type Success -Message "Tarea '$($Task.description)' completada."
@@ -182,7 +182,7 @@ function Invoke-CleanupPhase {
         $tasks = $catalogJson.items
     } catch {
         Write-PhoenixStyledOutput -Type Error -Message "Fallo CRÍTICO al leer o procesar el catálogo de limpieza: $($_.Exception.Message)"
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú principal..."
         return
     }
 
@@ -214,7 +214,7 @@ function Invoke-CleanupPhase {
             # Pausar solo para tareas que no son instantáneas y muestran mucha información.
             $pauseTasks = @("FindLargeFiles", "AnalyzeProcesses")
             if ($selectedTask.type -in $pauseTasks) {
-                Request-Continuation
+                Request-Continuation -Message "Presione Enter para volver al menú de limpieza..."
             }
         }
     }

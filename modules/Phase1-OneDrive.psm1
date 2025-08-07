@@ -181,11 +181,11 @@ function Invoke-OneDrivePhase {
         Repair-UserShellFolderPaths
 
         Write-PhoenixStyledOutput -Type Success -Message "La erradicación de OneDrive ha finalizado."
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú principal..."
 
     } catch {
         Write-PhoenixStyledOutput -Type Error -Message "Error fatal en la erradicación de OneDrive: $($_.Exception.Message)"
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú principal..."
     }
 }
 

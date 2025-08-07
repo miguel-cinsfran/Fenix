@@ -87,13 +87,13 @@ function Test-WslInstallation {
         if ($featuresToEnable.Count -gt 0) {
             Write-PhoenixStyledOutput -Type Warn -Message "Las siguientes características de Windows son necesarias y no están habilitadas:"
             $featuresToEnable | ForEach-Object { Write-PhoenixStyledOutput -Type Info -Message "  - $_" }
-            if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a habilitar estas características?") -eq 'S') {
+            if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a habilitar estas características?" -IsYesNoPrompt)[0] -eq 'S') {
                 foreach ($feature in $featuresToEnable) { Enable-WindowsOptionalFeature -FeatureName $feature }
                 Confirm-SystemRestart
                 return $false # Needs restart
             } else {
                 Write-PhoenixStyledOutput -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos."
-                Request-Continuation
+                Request-Continuation -Message "Presione Enter para continuar..."
                 return $false # Cannot proceed
             }
         }
@@ -197,16 +197,16 @@ function Start-WslUpdateCheck {
     } else {
         Write-PhoenixStyledOutput -Type Error -Message "No se pudo obtener el estado de WSL."
         Write-Host $statusResult.Output
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú..."
         return # Salir si no se puede obtener el estado.
     }
 
     Write-Host # Añadir una línea en blanco para espaciar.
 
     Write-PhoenixStyledOutput -Type Consent -Message "Esta opción buscará e instalará automáticamente la última versión del núcleo de WSL."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea buscar actualizaciones ahora?") -ne 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea buscar actualizaciones ahora?" -IsYesNoPrompt)[0] -ne 'S') {
         Write-PhoenixStyledOutput -Type Info -Message "Operación de actualización cancelada."
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú..."
         return
     }
 
@@ -221,7 +221,7 @@ function Start-WslUpdateCheck {
         Write-Host $updateResult.Output
     }
 
-    Request-Continuation
+    Request-Continuation -Message "Presione Enter para volver al menú..."
 }
 
 function Show-InstalledDistroMenu {
@@ -233,14 +233,14 @@ function Show-InstalledDistroMenu {
         if (-not $listResult.Success) {
             Write-PhoenixStyledOutput -Type Error -Message "No se pudo obtener la lista de distribuciones instaladas."
             Write-PhoenixStyledOutput -Type Log -Message "Error: $($listResult.Output)"
-            Request-Continuation
+            Request-Continuation -Message "Presione Enter para volver al menú..."
             return
         }
 
         # Comprobar mensajes conocidos de 'no hay distros'.
         if ($listResult.Output -match "No hay distribuciones instaladas" -or $listResult.Output -match "There are no installed distributions") {
             Write-PhoenixStyledOutput -Type Warn -Message "No se encontraron distribuciones de Linux instaladas."
-            Request-Continuation
+            Request-Continuation -Message "Presione Enter para volver al menú..."
             return
         }
 
@@ -264,7 +264,7 @@ function Show-InstalledDistroMenu {
 
         if ($distros.Count -eq 0) {
             Write-PhoenixStyledOutput -Type Warn -Message "No se pudieron analizar las distribuciones instaladas."
-            Request-Continuation
+            Request-Continuation -Message "Presione Enter para volver al menú..."
             return
         }
 
@@ -294,12 +294,12 @@ Seleccione una acción para '$($selectedDistro.Name)':
   V. Volver a la lista de distribuciones
 "@
         Write-Host $subPrompt
-        $subChoice = Request-MenuSelection -ValidChoices @('1', '2', '3', 'V') -PromptMessage "Acción"
+        $choice = (Request-MenuSelection -ValidChoices @('1', '2', '3', 'V') -PromptMessage "Acción" -AllowMultipleSelections:$false)[0]
 
-        switch ($subChoice) {
+        switch ($choice) {
             '1' { # Desinstalar
                 Write-PhoenixStyledOutput -Type Consent -Message "¡ADVERTENCIA! Esto eliminará permanentemente la distribución '$($selectedDistro.Name)' y todos sus datos."
-                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?") -eq 'S') {
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?" -IsYesNoPrompt)[0] -eq 'S') {
                     $result = Invoke-WslCommand -ArgumentList "--unregister `"$($selectedDistro.Name)`""
                     if ($result.Success) {
                         Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' ha sido desinstalada."
@@ -308,7 +308,7 @@ Seleccione una acción para '$($selectedDistro.Name)':
                         Write-PhoenixStyledOutput -Type Log -Message "Salida del comando:"
                         $result.Output | ForEach-Object { Write-PhoenixStyledOutput -Type Log -Message $_ }
                     }
-                    Request-Continuation
+                    Request-Continuation -Message "Presione Enter para volver a la lista..."
                     break
                 }
             }
@@ -319,12 +319,12 @@ Seleccione una acción para '$($selectedDistro.Name)':
                 } else {
                     Write-PhoenixStyledOutput -Type Error -Message "No se pudo establecer la distribución predeterminada."
                 }
-                Request-Continuation
+                Request-Continuation -Message "Presione Enter para volver a la lista..."
             }
             '3' { # Actualizar paquetes
                 Write-PhoenixStyledOutput -Type Warn -Message "Esta acción intentará actualizar los paquetes usando 'apt'. Esto es común para distros basadas en Debian (Ubuntu, etc.)."
                 Write-PhoenixStyledOutput -Type Warn -Message "Es posible que se le solicite su contraseña de sudo dentro de la terminal de WSL."
-                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?" -IsYesNoPrompt)[0] -eq 'S') {
                     Write-PhoenixStyledOutput -Type Info -Message "Lanzando el proceso de actualización para '$($selectedDistro.Name)'. Siga las instrucciones."
                     try {
                         Start-Process wsl -ArgumentList "-d `"$($selectedDistro.Name)`" -- sudo apt-get update && sudo apt-get upgrade -y" -Wait -NoNewWindow
@@ -332,7 +332,7 @@ Seleccione una acción para '$($selectedDistro.Name)':
                     } catch {
                          Write-PhoenixStyledOutput -Type Error -Message "No se pudo iniciar el proceso de actualización. Error: $($_.Exception.Message)"
                     }
-                    Request-Continuation
+                    Request-Continuation -Message "Presione Enter para volver a la lista..."
                 }
             }
             'V' { continue } # Continuar a la siguiente iteración del bucle para mostrar la lista de distros.
@@ -350,7 +350,7 @@ function Show-AvailableDistroMenu {
     # Manejar el posible fallo de la función de ayuda (retorno nulo).
     if ($null -eq $availableDistros) {
         # El mensaje de error ya fue impreso por la función. Solo esperar al usuario.
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú..."
         return
     }
 
@@ -370,7 +370,7 @@ function Show-AvailableDistroMenu {
     # Manejar el caso donde no hay nada nuevo que instalar.
     if ($distrosToDisplay.Count -eq 0) {
         Write-PhoenixStyledOutput -Type Info -Message "No hay nuevas distribuciones para instalar. Es posible que todas las disponibles ya estén instaladas."
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú..."
         return
     }
 
@@ -388,7 +388,7 @@ function Show-AvailableDistroMenu {
     $selectedDistro = $menuItems[[int]$choice - 1].DistroData
 
     Write-PhoenixStyledOutput -Type Consent -Message "Se instalará la distribución '$($selectedDistro.FriendlyName)'."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?" -IsYesNoPrompt)[0] -eq 'S') {
         Write-PhoenixStyledOutput -Type Step -Message "Instalando $($selectedDistro.FriendlyName)... Esto puede tardar varios minutos."
         $installResult = Invoke-WslCommand -ArgumentList "--install -d `"$($selectedDistro.Name)`""
 
@@ -402,7 +402,7 @@ function Show-AvailableDistroMenu {
         Write-PhoenixStyledOutput -Type Info -Message "Instalación cancelada."
     }
 
-    Request-Continuation
+    Request-Continuation -Message "Presione Enter para volver al menú..."
 }
 
 function Show-WslFeatureMenu {
@@ -435,7 +435,7 @@ function Show-WslFeatureMenu {
         if ($isWslInstalled) {
             Write-PhoenixStyledOutput -Type Warn -Message "WSL está instalado. Para evitar problemas, las características no se pueden modificar desde este menú."
             Write-PhoenixStyledOutput -Type Warn -Message "Para deshabilitarlas, primero debe desinstalar WSL usando la opción del menú principal."
-            Request-Continuation
+            Request-Continuation -Message "Presione Enter para volver al menú..."
             return
         }
 
@@ -449,7 +449,7 @@ Seleccione una opción:
   V. Volver al menú principal
 "@
         Write-Host $prompt
-        $choice = Request-MenuSelection -ValidChoices @('1','2','3','4','V') -PromptMessage "Acción"
+        $choice = (Request-MenuSelection -ValidChoices @('1','2','3','4','V') -PromptMessage "Acción" -AllowMultipleSelections:$false)[0]
 
         $needsRestart = $false
         switch ($choice) {
@@ -463,7 +463,7 @@ Seleccione una opción:
         if ($needsRestart) {
             Confirm-SystemRestart
             Write-PhoenixStyledOutput -Type Info -Message "El estado actualizado se reflejará después de un reinicio."
-            Request-Continuation
+            Request-Continuation -Message "Presione Enter para volver al menú..."
         }
     }
 }
@@ -477,9 +477,9 @@ function Start-WslUninstall {
     Write-PhoenixStyledOutput -Type Warn -Message "Esto significa que se eliminarán permanentemente todos los datos, archivos y configuraciones dentro de esas distribuciones."
     Write-Host ""
 
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Entiende las consecuencias y desea continuar?") -ne 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Entiende las consecuencias y desea continuar?" -IsYesNoPrompt)[0] -ne 'S') {
         Write-PhoenixStyledOutput -Type Info -Message "Operación de desinstalación cancelada."
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú..."
         return
     }
 
@@ -487,7 +487,7 @@ function Start-WslUninstall {
     $confirmation = Read-Host
     if ($confirmation.Trim().ToUpper() -ne 'DESINSTALAR') {
         Write-PhoenixStyledOutput -Type Info -Message "La confirmación no coincide. Operación de desinstalación cancelada."
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú..."
         return
     }
 
@@ -525,7 +525,7 @@ function Start-WslUninstall {
     Write-Host ""
     Write-PhoenixStyledOutput -Type Info -Message "Si desea también deshabilitar las características de Windows subyacentes, puede usar la opción 'Administrar características' en el menú anterior DESPUÉS de reiniciar."
 
-    Request-Continuation
+    Request-Continuation -Message "Presione Enter para volver al menú..."
 }
 #endregion
 
@@ -545,35 +545,36 @@ function Invoke-WslPhase {
         while ($true) {
             Show-PhoenixHeader -Title "Administración de WSL" -NoClear
 
-            $menuItems = @(
-                @{ Description = "Ver estado y buscar actualizaciones de WSL" },
-                @{ Description = "Administrar distribuciones instaladas" },
-                @{ Description = "Instalar una nueva distribución" },
-                @{ Description = "Administrar características de Windows para WSL" },
-                @{ Description = "Desinstalar WSL" }
+            $menuOptions = @(
+                "Ver estado y buscar actualizaciones de WSL",
+                "Administrar distribuciones instaladas",
+                "Instalar una nueva distribución",
+                "Administrar características de Windows para WSL",
+                "Desinstalar WSL"
             )
 
-            $actionOptions = @{
-                "S" = "Salir"
+            for ($i = 0; $i -lt $menuOptions.Count; $i++) {
+                Write-PhoenixStyledOutput -Type Step -Message "[$($i+1)] $($menuOptions[$i])"
             }
+            Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
+            Write-Host
 
-            $choices = Show-PhoenixStandardMenu -Title "Menú Principal de WSL" -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una tarea"
-            if ($choices.Count -eq 0) { continue }
+            $validChoices = 1..($menuOptions.Count) + '0'
+            $choice = (Request-MenuSelection -ValidChoices $validChoices -PromptMessage "Seleccione una tarea" -AllowMultipleSelections:$false)[0]
 
-            foreach ($choice in $choices) {
-                switch ($choice) {
-                    "1" { Start-WslUpdateCheck }
-                    "2" { Show-InstalledDistroMenu }
-                    "3" { Show-AvailableDistroMenu }
-                    "4" { Show-WslFeatureMenu }
-                    "5" { Start-WslUninstall }
-                    "S" { Write-PhoenixStyledOutput -Type Info -Message "Saliendo del menú de WSL."; return }
-                }
+            if ($choice -eq '0') { return }
+
+            switch ($choice) {
+                "1" { Start-WslUpdateCheck }
+                "2" { Show-InstalledDistroMenu }
+                "3" { Show-AvailableDistroMenu }
+                "4" { Show-WslFeatureMenu }
+                "5" { Start-WslUninstall }
             }
         }
     } catch {
         Write-PhoenixStyledOutput -Type Error -Message "Error fatal en el módulo de WSL: $($_.Exception.Message)"
-        Request-Continuation
+        Request-Continuation -Message "Presione Enter para volver al menú principal..."
     }
 }
 
