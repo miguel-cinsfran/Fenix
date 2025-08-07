@@ -84,8 +84,8 @@ function _Get-PackageStatus_Cli {
         $status = "No Instalado"; $versionInfo = ""; $isUpgradable = $false
         $useNameCheck = -not [string]::IsNullOrEmpty($Package.checkName)
         $key = if ($useNameCheck) { $Package.checkName } else { $Package.installId }
-        $currentInstalledMap = if ($useNameCheck) { $using:installedByName } else { $using:installedById }
-        $currentUpgradableMap = if ($useNameCheck) { $using:upgradableByName } else { $using:upgradableById }
+        $currentInstalledMap = if ($useNameCheck) { $installedByName } else { $installedById }
+        $currentUpgradableMap = if ($useNameCheck) { $upgradableByName } else { $upgradableById }
 
         if ($currentUpgradableMap.ContainsKey($key)) {
             $status = "Actualización Disponible"
@@ -141,8 +141,8 @@ function Get-PackageStatus {
         $status = "No Instalado"; $versionInfo = ""; $isUpgradable = $false
         $useNameCheck = -not [string]::IsNullOrEmpty($Package.checkName)
         $key = if ($useNameCheck) { $Package.checkName } else { $Package.installId }
-        $currentInstalledMap = if ($useNameCheck) { $using:installedVersionsByName } else { $using:installedVersionsById }
-        $currentUpgradableMap = if ($useNameCheck) { $using:upgradableVersionsByName } else { $using:upgradableVersionsById }
+        $currentInstalledMap = if ($useNameCheck) { $installedVersionsByName } else { $installedVersionsById }
+        $currentUpgradableMap = if ($useNameCheck) { $upgradableVersionsByName } else { $upgradableVersionsById }
 
         if ($currentUpgradableMap.ContainsKey($key)) {
             $status = "Actualización Disponible"

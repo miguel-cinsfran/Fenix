@@ -255,7 +255,7 @@ function Test-Phase2Prerequisites {
             $allChecksPassed = $false
         }
     } else {
-        Write-Host " [Ã‰XITO]" -F $Global:Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
     }
 
     Write-PhoenixStyledOutput -Message "Verificando existencia de Winget..." -NoNewline
@@ -264,7 +264,7 @@ function Test-Phase2Prerequisites {
         Write-PhoenixStyledOutput -Type Error -Message "El gestor de paquetes Winget no fue encontrado. Por favor, actualice su 'App Installer' desde la Microsoft Store."
         $allChecksPassed = $false
     } else {
-        Write-Host " [Ã‰XITO]" -F $Global:Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
         Write-PhoenixStyledOutput -Type SubStep -Message "Actualizando repositorios de Winget..."
         Invoke-NativeCommandWithOutputCapture -Executable "winget" -ArgumentList "source update" -Activity "Actualizando repositorios de Winget" | Out-Null
     }
@@ -288,7 +288,7 @@ function Test-Phase2Prerequisites {
             $Global:UseWingetCli = $true
         }
     } else {
-        Write-Host " [Ã‰XITO]" -F $Global:Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
     }
 
     if (-not $allChecksPassed) {
