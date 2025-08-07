@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 7 para la auditoría y exportación del estado del sistema.
 .DESCRIPTION

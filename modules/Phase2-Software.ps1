@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 2 para la instalación de software desde manifiestos.
 .DESCRIPTION
@@ -261,7 +261,7 @@ function Invoke-Phase2_PreFlightChecks {
             $allChecksPassed = $false
         }
     } else {
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+        Write-Host " [Ã‰XITO]" -F $Global:Theme.Success
     }
 
     Write-Styled -Message "Verificando existencia de Winget..." -NoNewline
@@ -270,7 +270,7 @@ function Invoke-Phase2_PreFlightChecks {
         Write-Styled -Type Error -Message "El gestor de paquetes Winget no fue encontrado. Por favor, actualice su 'App Installer' desde la Microsoft Store."
         $allChecksPassed = $false
     } else {
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+        Write-Host " [Ã‰XITO]" -F $Global:Theme.Success
         Write-Styled -Type SubStep -Message "Actualizando repositorios de Winget..."
         Invoke-NativeCommand -Executable "winget" -ArgumentList "source update" -Activity "Actualizando repositorios de Winget" | Out-Null
     }
@@ -294,7 +294,7 @@ function Invoke-Phase2_PreFlightChecks {
             $Global:UseWingetCli = $true
         }
     } else {
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+        Write-Host " [Ã‰XITO]" -F $Global:Theme.Success
     }
 
     if (-not $allChecksPassed) {

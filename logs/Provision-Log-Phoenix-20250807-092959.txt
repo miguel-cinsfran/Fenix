@@ -1,0 +1,311 @@
+﻿**********************
+Inicio de la transcripción de Windows PowerShell
+Hora de inicio: 20250807092959
+Nombre de usuario: EMMA\ic_ma
+Usuario RunAs: EMMA\ic_ma
+Nombre de la configuración: 
+Máquina: EMMA (Microsoft Windows NT 10.0.26100.0)
+Aplicación host: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe
+Id. de proceso: 1272
+PSVersion: 5.1.26100.4768
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.4768
+BuildVersion: 10.0.26100.4768
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+La transcripción ha comenzado. El archivo de salida es C:\github\Fenix\logs\Provision-Log-Phoenix-20250807-092959.txt
+  -> Verificando la codificación de los ficheros del script...
+ [ÉXITO] Todos los ficheros ya tienen la codificación correcta (UTF-8 con BOM).
+
+
+[4mMotor de Aprovisionamiento Fénix v3.0[0m
+---
+
+Este script automatiza la configuración y aprovisionamiento de un entorno de desarrollo en Windows.
+Realizará cambios significativos en el sistema, como instalar/desinstalar software y aplicar optimizaciones.
+
+ [OMITIDO] ADVERTENCIA: Ejecute este script bajo su propio riesgo. Asegúrese de entender lo que hace cada fase.
+
+
+[4mMotor de Aprovisionamiento Fénix v3.0[0m
+---
+
+Toda la salida se registrará en: C:\github\Fenix\logs\Provision-Log-Phoenix-20250807-092959.txt
+  -> [1] Ejecutar FASE 1: Erradicación de OneDrive
+  -> [2] Ejecutar FASE 2: Instalación de Software
+  -> [3] Ejecutar FASE 3: Optimización del Sistema
+  -> [4] Ejecutar FASE 4: Instalación de WSL2
+  -> [5] Ejecutar FASE 5: Limpieza del Sistema
+  -> [6] Ejecutar FASE 6: Saneamiento y Calidad del Código
+  -> [7] Ejecutar FASE 7: Generar Informe de Auditoría
+  -> [R] Refrescar Menú
+  -> [Q] Salir
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 60 Carácter: 13
++         if ($using:outdatedPackages.ContainsKey($installId)) {
++             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 62 Carácter: 57
++ ...        $versionInfo = "(v$($using:outdatedPackages[$installId].Curren ...
++                                                        ~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 62 Carácter: 108
++ ... $installId].Current) -> v$($using:outdatedPackages[$installId].Availa ...
++                                                        ~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 65 Carácter: 17
++         elseif ($using:installedPackages.ContainsKey($installId)) {
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 67 Carácter: 58
++ ...           $versionInfo = "(v$($using:installedPackages[$installId]))"
++                                                            ~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : InvalidUsingExpression
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 60 Carácter: 13
++         if ($using:outdatedPackages.ContainsKey($installId)) {
++             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 62 Carácter: 57
++ ...        $versionInfo = "(v$($using:outdatedPackages[$installId].Curren ...
++                                                        ~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 62 Carácter: 108
++ ... $installId].Current) -> v$($using:outdatedPackages[$installId].Availa ...
++                                                        ~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 65 Carácter: 17
++         elseif ($using:installedPackages.ContainsKey($installId)) {
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+
+En C:\github\Fenix\modules\package_managers\chocolatey.psm1: 67 Carácter: 58
++ ...           $versionInfo = "(v$($using:installedPackages[$installId]))"
++                                                            ~~~~~~~~~~
+No se permite la expresión en una expresión Using.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : InvalidUsingExpression
+
+Import-Module : No se cargó el módulo 'C:\github\Fenix\modules\package_managers\chocolatey.psm1' especificado porque no 
+se encontró ningún archivo de módulo válido en ningún directorio de módulo.
+En C:\github\Fenix\modules\Phase2-Software.ps1: 312 Carácter: 41
++ ... colatey'] = Import-Module (Join-Path $PSScriptRoot "package_managers/ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ResourceUnavailable: (C:\github\Fenix...chocolatey.psm1:String) [Import-Module], 
+FileNotFoundException
+    + FullyQualifiedErrorId : Modules_ModuleNotFound,Microsoft.PowerShell.Commands.ImportModuleCommand
+Import-Module : No se cargó el módulo 'C:\github\Fenix\modules\package_managers\chocolatey.psm1' especificado porque
+no se encontró ningún archivo de módulo válido en ningún directorio de módulo.
+En C:\github\Fenix\modules\Phase2-Software.ps1: 312 Carácter: 41
++ ... colatey'] = Import-Module (Join-Path $PSScriptRoot "package_managers/ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ResourceUnavailable: (C:\github\Fenix...chocolatey.psm1:String) [Import-Module], FileNot
+   FoundException
+    + FullyQualifiedErrorId : Modules_ModuleNotFound,Microsoft.PowerShell.Commands.ImportModuleCommand
+
+
+[4mFASE 2: Instalación de Software[0m
+---
+
+  -> [1] Administrar paquetes de Chocolatey
+  -> [2] Administrar paquetes de Winget
+  -> [3] Instalar TODOS los paquetes de ambos catálogos
+  -> [0] Volver al Menú Principal
+
+ [ERROR] Fallo CRÍTICO al leer o procesar 'C:\github\Fenix\assets\catalogs\chocolatey_catalog.json': El término 'Test-Json' no se reconoce como nombre de un cmdlet, función, archivo de script o programa ejecutable. Compruebe si escribió correctamente el nombre o, si incluyó una ruta de acceso, compruebe que dicha ruta es correcta e inténtelo de nuevo.
+
+Presione Enter para continuar...
+
+[4mFASE 2: Instalación de Software[0m
+---
+
+  -> [1] Administrar paquetes de Chocolatey
+  -> [2] Administrar paquetes de Winget
+  -> [3] Instalar TODOS los paquetes de ambos catálogos
+  -> [0] Volver al Menú Principal
+
+ [ERROR] Fallo CRÍTICO al leer o procesar 'C:\github\Fenix\assets\catalogs\winget_catalog.json': El término 'Test-Json' no se reconoce como nombre de un cmdlet, función, archivo de script o programa ejecutable. Compruebe si escribió correctamente el nombre o, si incluyó una ruta de acceso, compruebe que dicha ruta es correcta e inténtelo de nuevo.
+
+Presione Enter para continuar...
+
+[4mFASE 2: Instalación de Software[0m
+---
+
+  -> [1] Administrar paquetes de Chocolatey
+  -> [2] Administrar paquetes de Winget
+  -> [3] Instalar TODOS los paquetes de ambos catálogos
+  -> [0] Volver al Menú Principal
+
+
+[4mMotor de Aprovisionamiento Fénix v3.0[0m
+---
+
+Toda la salida se registrará en: C:\github\Fenix\logs\Provision-Log-Phoenix-20250807-092959.txt
+  -> [1] Ejecutar FASE 1: Erradicación de OneDrive
+  -> [2] Ejecutar FASE 2: Instalación de Software
+  -> [3] Ejecutar FASE 3: Optimización del Sistema
+  -> [4] Ejecutar FASE 4: Instalación de WSL2
+  -> [5] Ejecutar FASE 5: Limpieza del Sistema
+  -> [6] Ejecutar FASE 6: Saneamiento y Calidad del Código
+  -> [7] Ejecutar FASE 7: Generar Informe de Auditoría
+  -> [R] Refrescar Menú
+  -> [Q] Salir
+
+
+[4mFASE 1: Erradicación de OneDrive[0m
+---
+
+Esta fase detendrá procesos, desinstalará OneDrive y purgará sus rastros del sistema.
+  -> Deteniendo procesos de OneDrive...
+No se encontraron procesos de OneDrive en ejecución.
+  -> Ejecutando desinstaladores de OneDrive...
+     - Iniciando desinstalador: C:\WINDOWS\System32\OneDriveSetup.exe
+Iniciando tarea: Desinstalando OneDrive
+ExitCode: 
+    + CategoryInfo          : OperationStopped: (ExitCode: :String) [], RuntimeException
+    + FullyQualifiedErrorId : ExitCode: 
+    + PSComputerName        : localhost
+ExitCode:
+    + CategoryInfo          : OperationStopped: (ExitCode: :String) [], RuntimeException
+    + FullyQualifiedErrorId : ExitCode:
+    + PSComputerName        : localhost
+
+ [OMITIDO] El desinstalador en 'C:\WINDOWS\System32\OneDriveSetup.exe' finalizó con un error o advertencia.
+ [ÉXITO] Proceso de desinstalación finalizado.
+  -> Configurando Política de Grupo para deshabilitar OneDrive...
+ [OMITIDO] La edición de Windows no soporta GPO. Omitiendo este paso.
+  -> Purgando tareas programadas de OneDrive...
+No se encontraron tareas programadas de OneDrive.
+  -> Purgando claves de integración del Explorador...
+ [ÉXITO] Limpieza de claves del Explorador finalizada.
+  -> Purgando accesos directos del menú de inicio...
+No se encontró el acceso directo de OneDrive en el menú de inicio.
+  -> Auditando rutas de carpetas de usuario en el Registro...
+ [ÉXITO] Auditoría finalizada. No se encontraron rutas de OneDrive en el Registro.
+ [ÉXITO] La erradicación de OneDrive ha finalizado.
+
+Presione Enter para continuar...
+
+Presione Enter para continuar...
+
+[4mMotor de Aprovisionamiento Fénix v3.0[0m
+---
+
+Toda la salida se registrará en: C:\github\Fenix\logs\Provision-Log-Phoenix-20250807-092959.txt
+  -> [1] Ejecutar FASE 1: Erradicación de OneDrive
+  -> [2] Ejecutar FASE 2: Instalación de Software
+  -> [3] Ejecutar FASE 3: Optimización del Sistema
+  -> [4] Ejecutar FASE 4: Instalación de WSL2
+  -> [5] Ejecutar FASE 5: Limpieza del Sistema
+  -> [6] Ejecutar FASE 6: Saneamiento y Calidad del Código
+  -> [7] Ejecutar FASE 7: Generar Informe de Auditoría
+  -> [R] Refrescar Menú
+  -> [Q] Salir
+
+ [ERROR] Fallo CRÍTICO al leer o procesar el catálogo de tweaks: El término 'Test-Json' no se reconoce como nombre de un cmdlet, función, archivo de script o programa ejecutable. Compruebe si escribió correctamente el nombre o, si incluyó una ruta de acceso, compruebe que dicha ruta es correcta e inténtelo de nuevo.
+
+Presione Enter para continuar...
+
+Presione Enter para continuar...
+
+[4mMotor de Aprovisionamiento Fénix v3.0[0m
+---
+
+Toda la salida se registrará en: C:\github\Fenix\logs\Provision-Log-Phoenix-20250807-092959.txt
+  -> [1] Ejecutar FASE 1: Erradicación de OneDrive
+  -> [2] Ejecutar FASE 2: Instalación de Software
+  -> [3] Ejecutar FASE 3: Optimización del Sistema
+  -> [4] Ejecutar FASE 4: Instalación de WSL2
+  -> [5] Ejecutar FASE 5: Limpieza del Sistema
+  -> [6] Ejecutar FASE 6: Saneamiento y Calidad del Código
+  -> [7] Ejecutar FASE 7: Generar Informe de Auditoría
+  -> [R] Refrescar Menú
+  -> [Q] Salir
+
+
+[4mFASE 4: Administración de WSL2[0m
+---
+
+  -> Verificando el estado actual de WSL...
+Iniciando tarea: Verificando estado de WSL
+ [ÉXITO] WSL ya está instalado y operativo.
+
+[4mAdministración de WSL[0m
+---
+
+
+[4mMenú Principal de WSL[0m
+---
+
+[ ]   1. Ver estado y buscar actualizaciones de WSL
+[ ]   2. Administrar distribuciones instaladas
+[ ]   3. Instalar una nueva distribución
+[ ]   4. Administrar características de Windows para WSL
+[ ]   5. Desinstalar WSL
+
+-> [S] Salir
+
+[4mAdministrar Distribuciones Instaladas[0m
+---
+
+Iniciando tarea: Listando distribuciones instaladas
+ [OMITIDO] No se pudieron analizar las distribuciones instaladas.
+
+Presione Enter para continuar...
+
+[4mAdministración de WSL[0m
+---
+
+
+[4mMenú Principal de WSL[0m
+---
+
+[ ]   1. Ver estado y buscar actualizaciones de WSL
+[ ]   2. Administrar distribuciones instaladas
+[ ]   3. Instalar una nueva distribución
+[ ]   4. Administrar características de Windows para WSL
+[ ]   5. Desinstalar WSL
+
+-> [S] Salir
+ [ERROR] Opciones no válidas: 0
+
+ [ERROR] Opciones no válidas: Q
+
+Saliendo del menú de WSL.
+
+[4mMotor de Aprovisionamiento Fénix v3.0[0m
+---
+
+Toda la salida se registrará en: C:\github\Fenix\logs\Provision-Log-Phoenix-20250807-092959.txt
+  -> [1] Ejecutar FASE 1: Erradicación de OneDrive
+  -> [2] Ejecutar FASE 2: Instalación de Software
+  -> [3] Ejecutar FASE 3: Optimización del Sistema
+  -> [4] Ejecutar FASE 4: Instalación de WSL2
+  -> [5] Ejecutar FASE 5: Limpieza del Sistema
+  -> [6] Ejecutar FASE 6: Saneamiento y Calidad del Código
+  -> [7] Ejecutar FASE 7: Generar Informe de Auditoría
+  -> [R] Refrescar Menú
+  -> [Q] Salir
+
+
+[4mPROCESO FINALIZADO[0m
+---
+
+
+El log completo de la sesión se ha guardado en: C:\github\Fenix\logs\Provision-Log-Phoenix-20250807-092959.txt
+
+**********************
+Fin de la transcripción de Windows PowerShell
+Hora de finalización: 20250807093105
+**********************
