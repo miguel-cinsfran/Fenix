@@ -208,7 +208,7 @@ function Show-CodeQualityRuleMenu {
         Write-PhoenixStyledOutput -Type Step -Message "[0] Guardar y Volver"
 
         $numericChoices = 0..($rules.Count + 3) | ForEach-Object { "$_" }
-        $choice = (Request-MenuSelection -ValidChoices $numericChoices -PromptMessage "Seleccione una opción para modificar" -AllowMultipleSelections:$false)[0]
+        $choice = Request-MenuSelection -ValidChoices $numericChoices -PromptMessage "Seleccione una opción para modificar" -AllowMultipleSelections:$false
 
         switch ($choice) {
             '0' { $exitMenu = $true; continue }
@@ -261,7 +261,7 @@ function Start-CodeQualityAnalysisAndFix {
     $filesToFix | ForEach-Object { Write-PhoenixStyledOutput -Type Info -Message "  - $($_.Path) ($($_.Reason))" }
     Write-Host
 
-    $consent = (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "El script aplicará las correcciones configuradas. ¿Desea proceder?" -IsYesNoPrompt)[0]
+    $consent = Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "El script aplicará las correcciones configuradas. ¿Desea proceder?" -IsYesNoPrompt
     if ($consent -ne 'S') {
         Write-PhoenixStyledOutput -Type Error -Message "Operación cancelada por el usuario."
         Start-Sleep -Seconds 2 # Pausa breve para leer el mensaje antes de volver al menú.
@@ -290,7 +290,7 @@ function Invoke-CodeQualityPhase {
         Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
         Write-Host
 
-        $choice = (Request-MenuSelection -ValidChoices @('1', '2', '3', '0') -AllowMultipleSelections:$false)[0]
+        $choice = Request-MenuSelection -ValidChoices @('1', '2', '3', '0') -AllowMultipleSelections:$false
 
         switch ($choice) {
             '0' { $exitMenu = $true }

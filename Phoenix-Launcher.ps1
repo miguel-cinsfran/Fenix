@@ -90,7 +90,7 @@ Write-Host
 Write-PhoenixStyledOutput -Type Warn -Message "ADVERTENCIA: Ejecute este script bajo su propio riesgo. Asegúrese de entender lo que hace cada fase."
 Write-Host
 
-$consent = (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "¿Acepta los riesgos y desea continuar?" -IsYesNoPrompt)[0]
+$consent = Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "¿Acepta los riesgos y desea continuar?" -IsYesNoPrompt
 if ($consent -ne 'S') {
     Write-PhoenixStyledOutput -Type Error -Message "Consentimiento no otorgado. El script se cerrará."
     Start-Sleep -Seconds 2
@@ -132,9 +132,8 @@ try {
 
         $numericChoices = 1..$mainMenuOptions.Count | ForEach-Object { "$_" }
         $validChoices = @($numericChoices) + @('R', '0')
-        $choices = Request-MenuSelection -ValidChoices $validChoices -AllowMultipleSelections:$false
-        if ($choices.Count -eq 0) { continue }
-        $choice = $choices[0]
+        $choice = Request-MenuSelection -ValidChoices $validChoices -AllowMultipleSelections:$false
+        if ([string]::IsNullOrEmpty($choice)) { continue }
 
 
         if ($choice -eq '0') { $exitMainMenu = $true; continue }

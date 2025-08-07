@@ -109,7 +109,7 @@ function Request-Continuation {
 
 function Confirm-SystemRestart {
     Write-PhoenixStyledOutput -Type Warn -Message "Se requiere un reinicio para aplicar completamente los cambios."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?" -IsYesNoPrompt)[0] -eq 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?" -IsYesNoPrompt) -eq 'S') {
         Write-PhoenixStyledOutput -Type Info -Message "Reiniciando el equipo en 5 segundos..."
         Start-Sleep -Seconds 5
         Restart-Computer -Force
@@ -190,7 +190,10 @@ function Request-MenuSelection {
             if ($invalidChoices.Count -gt 0) {
                 Write-PhoenixStyledOutput -Type Error -Message "Opciones no válidas: $($invalidChoices -join ', ')"; Start-Sleep -s 1; Write-Host
             } else {
-                return $finalChoices.ToArray()
+                if ($AllowMultipleSelections) {
+                    return $finalChoices.ToArray()
+                }
+                return $finalChoices[0]
             }
         }
     } catch [System.Management.Automation.PipelineStoppedException] {
@@ -433,7 +436,7 @@ function Start-PostInstallConfiguration {
     }
 
     Write-PhoenixStyledOutput -Type Consent -Message "El paquete '$friendlyName' tiene una configuración de productividad/accesibilidad disponible."
-    if ('N' -eq (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage '¿Desea aplicar esta configuración ahora?' -IsYesNoPrompt)[0]) {
+    if ('N' -eq (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage '¿Desea aplicar esta configuración ahora?' -IsYesNoPrompt)) {
         Write-PhoenixStyledOutput -Type Info -Message "Se omitió la aplicación de la configuración para '$friendlyName'."
         return
     }

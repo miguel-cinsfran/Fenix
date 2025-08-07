@@ -87,7 +87,7 @@ function Test-WslInstallation {
         if ($featuresToEnable.Count -gt 0) {
             Write-PhoenixStyledOutput -Type Warn -Message "Las siguientes características de Windows son necesarias y no están habilitadas:"
             $featuresToEnable | ForEach-Object { Write-PhoenixStyledOutput -Type Info -Message "  - $_" }
-            if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a habilitar estas características?" -IsYesNoPrompt)[0] -eq 'S') {
+            if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a habilitar estas características?" -IsYesNoPrompt) -eq 'S') {
                 foreach ($feature in $featuresToEnable) { Enable-WindowsOptionalFeature -FeatureName $feature }
                 Confirm-SystemRestart
                 return $false # Needs restart
@@ -204,7 +204,7 @@ function Start-WslUpdateCheck {
     Write-Host # Añadir una línea en blanco para espaciar.
 
     Write-PhoenixStyledOutput -Type Consent -Message "Esta opción buscará e instalará automáticamente la última versión del núcleo de WSL."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea buscar actualizaciones ahora?" -IsYesNoPrompt)[0] -ne 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea buscar actualizaciones ahora?" -IsYesNoPrompt) -ne 'S') {
         Write-PhoenixStyledOutput -Type Info -Message "Operación de actualización cancelada."
         Request-Continuation -Message "Presione Enter para volver al menú..."
         return
@@ -294,12 +294,12 @@ Seleccione una acción para '$($selectedDistro.Name)':
   V. Volver a la lista de distribuciones
 "@
         Write-Host $subPrompt
-        $choice = (Request-MenuSelection -ValidChoices @('1', '2', '3', 'V') -PromptMessage "Acción" -AllowMultipleSelections:$false)[0]
+        $choice = Request-MenuSelection -ValidChoices @('1', '2', '3', 'V') -PromptMessage "Acción" -AllowMultipleSelections:$false
 
         switch ($choice) {
             '1' { # Desinstalar
                 Write-PhoenixStyledOutput -Type Consent -Message "¡ADVERTENCIA! Esto eliminará permanentemente la distribución '$($selectedDistro.Name)' y todos sus datos."
-                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?" -IsYesNoPrompt)[0] -eq 'S') {
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?" -IsYesNoPrompt) -eq 'S') {
                     $result = Invoke-WslCommand -ArgumentList "--unregister `"$($selectedDistro.Name)`""
                     if ($result.Success) {
                         Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' ha sido desinstalada."
@@ -324,7 +324,7 @@ Seleccione una acción para '$($selectedDistro.Name)':
             '3' { # Actualizar paquetes
                 Write-PhoenixStyledOutput -Type Warn -Message "Esta acción intentará actualizar los paquetes usando 'apt'. Esto es común para distros basadas en Debian (Ubuntu, etc.)."
                 Write-PhoenixStyledOutput -Type Warn -Message "Es posible que se le solicite su contraseña de sudo dentro de la terminal de WSL."
-                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?" -IsYesNoPrompt)[0] -eq 'S') {
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?" -IsYesNoPrompt) -eq 'S') {
                     Write-PhoenixStyledOutput -Type Info -Message "Lanzando el proceso de actualización para '$($selectedDistro.Name)'. Siga las instrucciones."
                     try {
                         Start-Process wsl -ArgumentList "-d `"$($selectedDistro.Name)`" -- sudo apt-get update && sudo apt-get upgrade -y" -Wait -NoNewWindow
@@ -388,7 +388,7 @@ function Show-AvailableDistroMenu {
     $selectedDistro = $menuItems[[int]$choice - 1].DistroData
 
     Write-PhoenixStyledOutput -Type Consent -Message "Se instalará la distribución '$($selectedDistro.FriendlyName)'."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?" -IsYesNoPrompt)[0] -eq 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?" -IsYesNoPrompt) -eq 'S') {
         Write-PhoenixStyledOutput -Type Step -Message "Instalando $($selectedDistro.FriendlyName)... Esto puede tardar varios minutos."
         $installResult = Invoke-WslCommand -ArgumentList "--install -d `"$($selectedDistro.Name)`""
 
@@ -449,7 +449,7 @@ Seleccione una opción:
   V. Volver al menú principal
 "@
         Write-Host $prompt
-        $choice = (Request-MenuSelection -ValidChoices @('1','2','3','4','V') -PromptMessage "Acción" -AllowMultipleSelections:$false)[0]
+        $choice = Request-MenuSelection -ValidChoices @('1','2','3','4','V') -PromptMessage "Acción" -AllowMultipleSelections:$false
 
         $needsRestart = $false
         switch ($choice) {
@@ -477,7 +477,7 @@ function Start-WslUninstall {
     Write-PhoenixStyledOutput -Type Warn -Message "Esto significa que se eliminarán permanentemente todos los datos, archivos y configuraciones dentro de esas distribuciones."
     Write-Host ""
 
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Entiende las consecuencias y desea continuar?" -IsYesNoPrompt)[0] -ne 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Entiende las consecuencias y desea continuar?" -IsYesNoPrompt) -ne 'S') {
         Write-PhoenixStyledOutput -Type Info -Message "Operación de desinstalación cancelada."
         Request-Continuation -Message "Presione Enter para volver al menú..."
         return
@@ -561,7 +561,7 @@ function Invoke-WslPhase {
 
             $numericChoices = 1..$menuOptions.Count | ForEach-Object { "$_" }
             $validChoices = @($numericChoices) + @('0')
-            $choice = (Request-MenuSelection -ValidChoices $validChoices -PromptMessage "Seleccione una tarea" -AllowMultipleSelections:$false)[0]
+            $choice = Request-MenuSelection -ValidChoices $validChoices -PromptMessage "Seleccione una tarea" -AllowMultipleSelections:$false
 
             if ($choice -eq '0') { return }
 

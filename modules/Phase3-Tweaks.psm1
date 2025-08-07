@@ -249,7 +249,7 @@ function Invoke-TweaksPhase {
             $items = $tweakStatusList | Where-Object { $_.Status -eq 'Aplicado' }
             if ($items.Count -eq 0) { Write-PhoenixStyledOutput -Type Info -Message "No hay ajustes aplicados para revertir."; Start-Sleep -Seconds 2 }
             else {
-                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?" -IsYesNoPrompt)[0] -eq 'S') {
+                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?" -IsYesNoPrompt) -eq 'S') {
                     foreach($item in $items) { Invoke-TweakAction -Action "Revert" -Tweak $item.Tweak }
                     $actionTaken = $true
                  }
@@ -265,13 +265,13 @@ function Invoke-TweaksPhase {
                 Invoke-TweakAction -Action "Apply" -Tweak $selectedItem.Tweak
                 $actionTaken = $true
             } elseif ($selectedItem.Status -eq 'Aplicado') {
-                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?" -IsYesNoPrompt)[0] -eq 'S') {
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?" -IsYesNoPrompt) -eq 'S') {
                     Invoke-TweakAction -Action "Revert" -Tweak $selectedItem.Tweak
                     $actionTaken = $true
                 }
             } else {
                 if ($selectedItem.Status -eq 'Aplicado (No Reversible)') {
-                    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?" -IsYesNoPrompt)[0] -eq 'S') {
+                    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?" -IsYesNoPrompt) -eq 'S') {
                         Invoke-SoftwareSearchAndInstall
                         $actionTaken = $true
                     }

@@ -41,7 +41,7 @@ function Repair-UserShellFolderPaths {
     $issuesFound | ForEach-Object { Write-PhoenixStyledOutput -Type Info -Message "  $($_.Name) = '$($_.BadValue)'" }
     Write-PhoenixStyledOutput -Type Consent -Message "`nADVERTENCIA: La reparación de estas rutas es una operación de alto riesgo."
 
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a intentar corregir estas entradas?") -eq 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a intentar corregir estas entradas?" -IsYesNoPrompt) -eq 'S') {
         Write-PhoenixStyledOutput -Type SubStep -Message "Reparando claves del Registro..."
         try {
             $issuesFound | ForEach-Object {
@@ -76,7 +76,7 @@ function Repair-UserShellFolderPaths {
 function Invoke-OneDrivePhase {
     Show-PhoenixHeader -Title "FASE 1: Erradicación de OneDrive"
     Write-PhoenixStyledOutput -Type Consent -Message "Esta fase detendrá procesos, desinstalará OneDrive y purgará sus rastros del sistema."
-    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea proceder con la erradicación completa de OneDrive?") -ne 'S') {
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea proceder con la erradicación completa de OneDrive?" -IsYesNoPrompt) -ne 'S') {
         Write-PhoenixStyledOutput -Type Skip -Message "Operación cancelada por el usuario."
         Start-Sleep -Seconds 2
         return
