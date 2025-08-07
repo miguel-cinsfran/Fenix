@@ -1,4 +1,5 @@
-﻿**********************
+﻿Log a revisar
+**********************
 Inicio de la transcripción de Windows PowerShell
 Hora de inicio: 20250807092959
 Nombre de usuario: EMMA\ic_ma
