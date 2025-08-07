@@ -8,5 +8,6 @@
   "Error": "Red",
   "Consent": "Cyan",
   "Info": "Gray",
-  "Log": "DarkGray"
+  "Log": "DarkGray",
+  "Skip": "Gray"
 }

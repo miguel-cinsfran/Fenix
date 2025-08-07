@@ -77,7 +77,7 @@ function Invoke-OneDrivePhase {
     Show-PhoenixHeader -Title "FASE 1: Erradicación de OneDrive"
     Write-PhoenixStyledOutput -Type Consent -Message "Esta fase detendrá procesos, desinstalará OneDrive y purgará sus rastros del sistema."
     if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea proceder con la erradicación completa de OneDrive?") -ne 'S') {
-        Write-PhoenixStyledOutput -Type Warn -Message "Operación cancelada por el usuario."
+        Write-PhoenixStyledOutput -Type Skip -Message "Operación cancelada por el usuario."
         Start-Sleep -Seconds 2
         return
     }
@@ -136,7 +136,7 @@ function Invoke-OneDrivePhase {
                 Write-PhoenixStyledOutput -Type Error -Message "No se pudo aplicar la Política de Grupo: $($_.Exception.Message)"
             }
         } else {
-            Write-PhoenixStyledOutput -Type Warn -Message "La edición de Windows no soporta GPO. Omitiendo este paso."
+            Write-PhoenixStyledOutput -Type Skip -Message "La edición de Windows no soporta GPO. Omitiendo este paso."
         }
 
         # 4. Purgar tareas programadas

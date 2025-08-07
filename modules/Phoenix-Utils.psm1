@@ -40,9 +40,11 @@ function Show-PhoenixHeader {
 
 function Write-PhoenixStyledOutput {
     param([string]$Message, [string]$Type = "Info", [switch]$NoNewline)
-    $prefixMap = @{ Step="  -> "; SubStep="     - "; Success=" [ÉXITO] "; Warn=" [OMITIDO] "; Error=" [ERROR] "; Log="       | " }
+    $prefixMap = @{ Step="  -> "; SubStep="     - "; Success=" [ÉXITO] "; Warn=" [ADVERTENCIA] "; Skip=" [OMITIDO] "; Error=" [ERROR] "; Log="       | " }
     $prefix = $prefixMap[$Type]
 
+    # Asignar un color por defecto si el tipo no está en el tema.
+    # Esto es útil para tipos nuevos como 'Skip' sin necesidad de que todos los temas lo definan.
     $color = $Global:Theme[$Type]
     if (-not $color) { $color = "White" } # Fallback to white if color not in theme
 

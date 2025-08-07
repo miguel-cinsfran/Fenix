@@ -120,7 +120,8 @@ function Get-AvailableWslDistro {
             if ([string]::IsNullOrWhiteSpace($trimmedLine)) { break }
 
             # Esta regex captura la primera palabra como NAME y el resto como FRIENDLY NAME.
-            $match = $trimmedLine -match '^([^\s]+)\s{2,}(.*)$'
+            # Se usa \s+ en vez de \s{2,} para mayor robustez.
+            $match = $trimmedLine -match '^([^\s]+)\s+(.*)$'
             if ($match) {
                 $distros += [PSCustomObject]@{
                     Name         = $matches[1].Trim()
@@ -201,8 +202,8 @@ function Show-InstalledDistroMenu {
         $distros = foreach ($line in $lines) {
             if ($line.Trim()) {
                 # Regex más robusta que usa \S+ (cualquier cosa que no sea un espacio) para Estado y Versión.
-                # Esto evita que el campo Nombre (que puede contener espacios) capture texto de más.
-                $match = $line -match '^\s?(\*?)\s*(.+?)\s{2,}(\S+)\s{2,}(\S+)\s*$'
+                # Se usa \s+ en lugar de \s{2,} para ser más tolerante a cambios en el formato de la salida.
+                $match = $line -match '^\s?(\*?)\s*(.+?)\s+(\S+)\s+(\S+)\s*$'
                 if ($match) {
                      [PSCustomObject]@{
                         IsDefault = $matches[1] -eq '*'

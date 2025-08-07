@@ -79,7 +79,7 @@ function _Invoke-CleanupTask-SetDNS {
     param($Task)
     Write-PhoenixStyledOutput -Type Info -Message "Los servidores DNS públicos pueden ofrecer mayor velocidad y privacidad."
     if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?")[0] -ne 'S') {
-        Write-PhoenixStyledOutput -Type Warn -Message "Operación cancelada."
+        Write-PhoenixStyledOutput -Type Skip -Message "Operación cancelada por el usuario."
         return
     }
 
@@ -97,19 +97,52 @@ function _Invoke-CleanupTask-SetDNS {
 function _Invoke-CleanupTask-RecycleBinCleanup {
     param($Task)
     Write-PhoenixStyledOutput -Type SubStep -Message $Task.description
-    try {
-        $shell = New-Object -ComObject Shell.Application
-        $recycleBin = $shell.NameSpace(0xA)
-        if ($recycleBin.Items().Count -eq 0) {
-            Write-PhoenixStyledOutput -Type Success -Message "La Papelera de Reciclaje ya está vacía."
-        } else {
-            if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea vaciar la papelera permanentemente?")[0] -eq 'S') {
-                Clear-RecycleBin -Force -ErrorAction Stop
-                Write-PhoenixStyledOutput -Type Success -Message "Papelera de Reciclaje vaciada."
+    $shell = New-Object -ComObject Shell.Application
+    # El namespace 0xA representa la Papelera de Reciclaje.
+    $recycleBin = $shell.NameSpace(0xA)
+    $items = $recycleBin.Items()
+    $itemCount = $items.Count
+
+    # Salir temprano si no hay nada que hacer.
+    if ($itemCount -eq 0) {
+        Write-PhoenixStyledOutput -Type Success -Message "La Papelera de Reciclaje ya está vacía."
+    } else {
+        # Calcular el tamaño total. La propiedad 'Size' está en bytes.
+        $totalSize = 0
+        foreach ($item in $items) { $totalSize += $item.Size }
+
+        # Formatear el tamaño a una unidad legible por humanos.
+        $sizeFormatted = ""
+        if ($totalSize -gt 1GB) { $sizeFormatted = "{0:N2} GB" -f ($totalSize / 1GB) }
+        elseif ($totalSize -gt 1MB) { $sizeFormatted = "{0:N2} MB" -f ($totalSize / 1MB) }
+        else { $sizeFormatted = "{0:N0} KB" -f ($totalSize / 1KB) }
+
+        $prompt = "La Papelera contiene $itemCount elemento(s) (aprox. $sizeFormatted). ¿Confirma que desea vaciarla permanentemente?"
+        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage $prompt)[0] -eq 'S') {
+            # Usar Clear-RecycleBin, que es el cmdlet estándar.
+            # -ErrorAction SilentlyContinue evita que errores en ficheros individuales (ej. bloqueados) detengan el proceso
+            # o muestren un error feo si la mayoría de ficheros se borran bien.
+            Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+
+            # Verificar el resultado volviendo a contar los elementos.
+            if ($recycleBin.Items().Count -eq 0) {
+                Write-PhoenixStyledOutput -Type Success -Message "La Papelera de Reciclaje ha sido vaciada."
+            } else {
+                Write-PhoenixStyledOutput -Type Error -Message "No se pudo vaciar la Papelera por completo. Algunos elementos pueden permanecer."
             }
+        } else {
+            Write-PhoenixStyledOutput -Type Skip -Message "Operación cancelada por el usuario."
         }
+    }
+
+    # Liberar los objetos COM para evitar fugas de memoria.
+    try {
+        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($recycleBin) | Out-Null
+        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
     } catch {
-        Write-PhoenixStyledOutput -Type Error -Message "No se pudo procesar la Papelera de Reciclaje: $($_.Exception.Message)"
+        # Ignorar errores durante la liberación, no son críticos para el usuario.
     }
 }
 
