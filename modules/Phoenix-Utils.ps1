@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de utilidades compartidas para el motor de aprovisionamiento Fénix.
 .DESCRIPTION
@@ -108,7 +108,7 @@ function Invoke-MenuPrompt {
         [string]$PromptMessage = "Seleccione una opción",
         [string[]]$ValidChoices
     )
-    
+
     try {
         while ($true) {
             # Usar Read-Host con -Prompt es más robusto que Write-Host -NoNewline
@@ -313,7 +313,7 @@ function Test-SoftwareCatalog {
     for ($i = 0; $i -lt $CatalogData.items.Count; $i++) {
         $item = $CatalogData.items[$i]
         if (-not $item.PSObject.Properties.Match('installId') -or -not $item.installId -or $item.installId -isnot [string]) {
-            Write-Styled -Type Error -Message "El item #$($i+1) en '$($CatalogFileName)' no tiene una propiedad 'installId' válida (string, no vacía)."
+            Write-Styled -Type Error -Message "El ítem #$($i+1) en '$($CatalogFileName)' no tiene una propiedad 'installId' válida (string, no vacía)."
             $isValid = $false
         }
     }

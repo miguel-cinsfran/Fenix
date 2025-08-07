@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 4 para la instalación y administración de WSL2.
 .DESCRIPTION
@@ -6,8 +6,9 @@
     características de Windows necesarias e instalar y administrar distribuciones.
     Presenta un menú interactivo para facilitar la administración de WSL.
 .NOTES
-    Versión: 2.0
+    Versión: 2.1
     Autor: miguel-cinsfran
+    Revisión: Corregida la codificación de caracteres y mejorada la legibilidad.
 #>
 
 #region Internal Functions
@@ -23,7 +24,7 @@ function _Enable-WindowsFeature {
 
 function _Initial-WslCheckAndInstall {
     Write-Styled -Type Step -Message "Verificando el estado actual de WSL..."
-    $statusResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--status" -FailureStrings "no está instalado" -Activity "Chequeando estado de WSL"
+    $statusResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--status" -FailureStrings "no está instalado" -Activity "Verificando estado de WSL"
 
     if (-not $statusResult.Success) {
         Write-Styled -Type Warn -Message "WSL no está instalado o no es funcional."
@@ -40,7 +41,7 @@ function _Initial-WslCheckAndInstall {
         if ($featuresToEnable.Count -gt 0) {
             Write-Styled -Type Warn -Message "Las siguientes características de Windows son necesarias y no están habilitadas:"
             $featuresToEnable | ForEach-Object { Write-Styled -Type Info -Message "  - $_" }
-            if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Autoriza al script a habilitar estas características?") -eq 'S') {
+            if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a habilitar estas características?") -eq 'S') {
                 foreach ($feature in $featuresToEnable) { _Enable-WindowsFeature -FeatureName $feature }
                 Invoke-RestartPrompt
                 return $false # Needs restart
@@ -88,37 +89,37 @@ function _Get-AvailableWslDistros {
     if (-not $onlineResult.Success) {
         Write-Styled -Type Error -Message "No se pudo obtener la lista de distribuciones disponibles desde Microsoft Store."
         Write-Styled -Type Log -Message "Error: $($onlineResult.Output)"
-        return $null # Return null on command failure
+        return $null # Devolver null en caso de fallo del comando.
     }
 
-    # Handle cases where the command succeeds but returns a 'no distros' message
+    # Manejar casos donde el comando tiene éxito pero devuelve un mensaje de 'no hay distros'.
     if ($onlineResult.Output -match "No hay distribuciones disponibles" -or $onlineResult.Output -match "There are no distributions available") {
-        # This is not an error, so we return an empty array.
+        # Esto no es un error, así que devolvemos un array vacío.
         return @()
     }
 
-    # Split the output into lines and remove any blank or whitespace-only lines to make parsing reliable.
+    # Dividir la salida en líneas y eliminar las que estén en blanco para un análisis fiable.
     $lines = $onlineResult.Output -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
     $distros = @()
     $parsing = $false
 
     foreach ($line in $lines) {
-        # Start parsing after the header line. This is more robust than a fixed index or relying on clean output.
+        # Empezar a analizar después de la línea de cabecera. Es más robusto que un índice fijo.
         if (-not $parsing -and $line -match "^\s*NAME\s+FRIENDLY NAME\s*") {
             $parsing = $true
-            continue # Skip the header line itself
+            continue # Saltar la línea de cabecera.
         }
 
         if ($parsing) {
-            # Skip the separator line '---'
+            # Saltar la línea separadora '---'.
             if ($line -match '^-{5,}') { continue }
 
             $trimmedLine = $line.Trim()
 
-            # Stop parsing if we hit a blank line after starting
+            # Detener el análisis si encontramos una línea en blanco después de haber empezado.
             if ([string]::IsNullOrWhiteSpace($trimmedLine)) { break }
 
-            # This regex captures the first word as NAME and the rest as FRIENDLY NAME, requiring at least two spaces separator
+            # Esta regex captura la primera palabra como NAME y el resto como FRIENDLY NAME.
             $match = $trimmedLine -match '^([^\s]+)\s{2,}(.*)$'
             if ($match) {
                 $distros += [PSCustomObject]@{
@@ -150,13 +151,13 @@ function Invoke-WslUpdateCheck {
         Write-Styled -Type Error -Message "No se pudo obtener el estado de WSL."
         Write-Host $statusResult.Output
         Pause-And-Return
-        return # Exit if we can't even get the status
+        return # Salir si no se puede obtener el estado.
     }
 
-    Write-Host # Add a blank line for spacing before the next prompt
+    Write-Host # Añadir una línea en blanco para espaciar.
 
     Write-Styled -Type Consent -Message "Esta opción buscará e instalará automáticamente la última versión del núcleo de WSL."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea buscar actualizaciones ahora?") -ne 'S') {
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea buscar actualizaciones ahora?") -ne 'S') {
         Write-Styled -Type Info -Message "Operación de actualización cancelada."
         Pause-And-Return
         return
@@ -177,7 +178,7 @@ function Invoke-WslUpdateCheck {
 }
 
 function Show-InstalledDistrosMenu {
-    while ($true) { # Main loop to allow refreshing the list
+    while ($true) { # Bucle principal para permitir refrescar la lista.
         Show-Header -Title "Administrar Distribuciones Instaladas" -NoClear
 
         $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --verbose" -Activity "Listando distribuciones instaladas"
@@ -189,7 +190,7 @@ function Show-InstalledDistrosMenu {
             return
         }
 
-        # Check for known "no distros" messages in the output.
+        # Comprobar mensajes conocidos de 'no hay distros'.
         if ($listResult.Output -match "No hay distribuciones instaladas" -or $listResult.Output -match "There are no installed distributions") {
             Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux instaladas."
             Pause-And-Return
@@ -231,7 +232,7 @@ function Show-InstalledDistrosMenu {
 
         $selectedDistro = $menuItems[[int]$distroChoice - 1].DistroData
 
-        # Sub-menu for the selected distro
+        # Submenú para la distribución seleccionada.
         $subHeader = "Administrando: $($selectedDistro.Name) (Estado: $($selectedDistro.State), Versión: $($selectedDistro.Version))"
         Show-Header -Title $subHeader -NoClear
 
@@ -246,24 +247,24 @@ Seleccione una acción para '$($selectedDistro.Name)':
         $subChoice = Invoke-MenuPrompt -ValidChoices @('1', '2', '3', 'V') -PromptMessage "Acción"
 
         switch ($subChoice) {
-            '1' { # Uninstall
+            '1' { # Desinstalar
                 Write-Styled -Type Consent -Message "¡ADVERTENCIA! Esto eliminará permanentemente la distribución '$($selectedDistro.Name)' y todos sus datos."
-                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Está seguro que desea continuar?") -eq 'S') {
+                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?") -eq 'S') {
                     Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--unregister $($selectedDistro.Name)" -Activity "Desinstalando $($selectedDistro.Name)"
                     Write-Styled -Type Success -Message "'$($selectedDistro.Name)' ha sido desinstalada."
                     Pause-And-Return
-                    break # Break the inner switch to force a refresh of the list
+                    break # Romper el switch para forzar un refresco de la lista.
                 }
             }
-            '2' { # Set as default
+            '2' { # Establecer como predeterminada
                 Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--set-default $($selectedDistro.Name)" -Activity "Estableciendo $($selectedDistro.Name) como predeterminada"
                 Write-Styled -Type Success -Message "'$($selectedDistro.Name)' es ahora la distribución predeterminada."
                 Pause-And-Return
             }
-            '3' { # Update packages
+            '3' { # Actualizar paquetes
                 Write-Styled -Type Warn -Message "Esta acción intentará actualizar los paquetes usando 'apt'. Esto es común para distros basadas en Debian (Ubuntu, etc.)."
                 Write-Styled -Type Warn -Message "Es posible que se le solicite su contraseña de sudo dentro de la terminal de WSL."
-                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea continuar?") -eq 'S') {
+                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
                     Write-Styled -Type Info -Message "Lanzando el proceso de actualización para '$($selectedDistro.Name)'. Siga las instrucciones."
                     try {
                         Start-Process wsl -ArgumentList "-d $($selectedDistro.Name) -- sudo apt-get update && sudo apt-get upgrade -y" -Wait -NoNewWindow
@@ -274,26 +275,26 @@ Seleccione una acción para '$($selectedDistro.Name)':
                     Pause-And-Return
                 }
             }
-            'V' { continue } # Continue to the next iteration of the main while loop to show the distro list
+            'V' { continue } # Continuar a la siguiente iteración del bucle para mostrar la lista de distros.
         }
-        if ($subChoice -eq '1') { continue } # Refresh list after uninstall
+        if ($subChoice -eq '1') { continue } # Refrescar la lista después de desinstalar.
     }
 }
 
 function Show-AvailableDistros {
     Show-Header -Title "Instalar Nueva Distribución" -NoClear
 
-    # Use the new helper function to get available distros. This encapsulates the parsing logic.
+    # Usar la función de ayuda para obtener las distros disponibles.
     $availableDistros = _Get-AvailableWslDistros
 
-    # Handle potential failure from the helper function ($null return).
+    # Manejar el posible fallo de la función de ayuda (retorno nulo).
     if ($null -eq $availableDistros) {
-        # Error message was already printed by the helper. Just wait for user input.
+        # El mensaje de error ya fue impreso por la función. Solo esperar al usuario.
         Pause-And-Return
         return
     }
 
-    # Get the list of already installed distros to filter them out.
+    # Obtener la lista de distros ya instaladas para filtrarlas.
     $installedResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones instaladas"
     $installedNames = @()
     if ($installedResult.Success) {
@@ -303,17 +304,17 @@ function Show-AvailableDistros {
         }
     }
 
-    # Filter the list of available distros against those already installed.
+    # Filtrar la lista de distros disponibles contra las ya instaladas.
     $distrosToDisplay = $availableDistros | Where-Object { $installedNames -notcontains $_.Name -and $installedNames -notcontains $_.FriendlyName }
 
-    # Handle the case where there's nothing new to install.
+    # Manejar el caso donde no hay nada nuevo que instalar.
     if ($distrosToDisplay.Count -eq 0) {
         Write-Styled -Type Info -Message "No hay nuevas distribuciones para instalar. Es posible que todas las disponibles ya estén instaladas."
         Pause-And-Return
         return
     }
 
-    # Display menu and handle installation (this part remains the same).
+    # Mostrar el menú y manejar la instalación.
     $menuItems = @()
     foreach ($distro in $distrosToDisplay) {
         $menuItems += @{ Description = $distro.FriendlyName; DistroData = $distro }
@@ -327,7 +328,7 @@ function Show-AvailableDistros {
     $selectedDistro = $menuItems[[int]$choice - 1].DistroData
 
     Write-Styled -Type Consent -Message "Se instalará la distribución '$($selectedDistro.FriendlyName)'."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea continuar?") -eq 'S') {
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
         Write-Styled -Type Step -Message "Instalando $($selectedDistro.FriendlyName)... Esto puede tardar varios minutos."
         $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install -d $($selectedDistro.Name)" -Activity "Instalando $($selectedDistro.Name)" -IdleTimeoutEnabled:$false -ProgressRegex '(\d+)%\s*$'
 
@@ -416,7 +417,7 @@ function Invoke-WslUninstall {
     Write-Styled -Type Warn -Message "Esto significa que se eliminarán permanentemente todos los datos, archivos y configuraciones dentro de esas distribuciones."
     Write-Host ""
 
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Entiende las consecuencias y desea continuar?") -ne 'S') {
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Entiende las consecuencias y desea continuar?") -ne 'S') {
         Write-Styled -Type Info -Message "Operación de desinstalación cancelada."
         Pause-And-Return
         return
@@ -480,7 +481,7 @@ function Invoke-Phase4_WSL {
             return
         }
 
-        # Main Menu Loop
+        # Bucle del Menú Principal
         while ($true) {
             Show-Header -Title "Administración de WSL" -NoClear
 

@@ -1,12 +1,13 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 5 para la limpieza y optimización del sistema.
 .DESCRIPTION
     Contiene un menú de tareas de limpieza, algunas automáticas y otras interactivas,
     cargadas desde un catálogo JSON para mayor modularidad.
 .NOTES
-    Versión: 1.0
+    Versión: 1.1
     Autor: miguel-cinsfran
+    Revisión: Corregida la codificación de caracteres y mejorada la legibilidad.
 #>
 
 #region Cleanup Task Helpers
@@ -77,7 +78,7 @@ function _Invoke-CleanupTask-AnalyzeProcesses {
 function _Invoke-CleanupTask-SetDNS {
     param($Task)
     Write-Styled -Type Info -Message "Los servidores DNS públicos pueden ofrecer mayor velocidad y privacidad."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?") -ne 'S') {
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?") -ne 'S') {
         Write-Styled -Type Warn -Message "Operación cancelada."
         return
     }
@@ -158,7 +159,7 @@ function Invoke-Phase5_Cleanup {
             $actionTaken = $true
         } else {
             Write-Styled -Type Error -Message "Tipo de tarea desconocido: '$($selectedTask.type)'"
-            $actionTaken = $true # Pause even on error
+            $actionTaken = $true # Pausar incluso si hay error.
         }
 
         if ($actionTaken) { Pause-And-Return }

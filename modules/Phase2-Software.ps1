@@ -1,12 +1,13 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 2 para la instalación de software desde manifiestos.
 .DESCRIPTION
     Contiene la lógica para cargar catálogos de Chocolatey y Winget, y presenta
     un submenú para permitir la instalación granular o completa de los paquetes.
 .NOTES
-    Versión: 2.0
+    Versión: 2.1
     Autor: miguel-cinsfran
+    Revisión: Corregida la codificación de caracteres y mejorada la legibilidad y robustez.
 #>
 
 function _Execute-SoftwareJob {
@@ -181,7 +182,9 @@ function _Get-WingetPackageStatus {
 function _Parse-WingetListLine {
     param([string]$Line)
 
-    # El formato de salida de 'winget list' es:
+    # El formato de salida de 'winget list' es de ancho fijo, lo que lo hace difícil de analizar
+    # si un nombre de paquete contiene muchos espacios.
+    # Ejemplo:
     # Nombre               Id                  Versión      Disponible   Fuente
     # --------------------------------------------------------------------------
     # Git                  Git.Git             2.39.2       2.40.0       winget
@@ -191,22 +194,21 @@ function _Parse-WingetListLine {
     $line = $Line.TrimEnd()
     if ([string]::IsNullOrWhiteSpace($line)) { return $null }
 
-    # Dividir por 2 o más espacios para manejar nombres con espacios.
+    # La estrategia más robusta es analizar de derecha a izquierda, ya que las últimas
+    # columnas (Fuente, Disponible, Versión, Id) son más predecibles que el Nombre.
     $parts = $line -split '\s{2,}' | Where-Object { $_ }
-    if ($parts.Count -lt 3) { return $null } # Línea malformada
+    if ($parts.Count -lt 3) { return $null } # Línea malformada, no tiene suficientes columnas.
 
-    # La última columna puede ser la fuente.
+    # La última columna puede ser la fuente (o no).
     $source = ""
     if ($parts[-1] -in @('winget', 'msstore')) {
         $source = $parts[-1]
-        $parts = $parts[0..($parts.Count - 2)]
+        $parts = $parts[0..($parts.Count - 2)] # Quitar la fuente de las partes a procesar.
     }
 
-    # Si después de quitar la fuente no quedan suficientes partes, la línea es inválida.
-    if ($parts.Count -lt 3) { return $null }
+    if ($parts.Count -lt 3) { return $null } # Si después de quitar la fuente no quedan suficientes partes, la línea es inválida.
 
-    # Asignación de columnas de derecha a izquierda, que son más consistentes.
-    # El resto de las partes a la izquierda forman el nombre del paquete.
+    # Asignación de columnas de derecha a izquierda.
     $name = ""; $id = ""; $version = ""; $available = ""
 
     if ($parts.Count -ge 4) { # Formato con 'Disponible': Nombre, Id, Versión, Disponible
@@ -260,7 +262,7 @@ function _Get-WingetPackageStatus_Cli {
     if ($dataStartIndex -ge $lines.Length) {
         Write-Styled -Type Warn -Message "No se encontraron datos de paquetes en la salida de winget."
     } else {
-        # Procesar cada línea de datos usando el nuevo parser.
+        # Procesar cada línea de datos usando el parser robusto.
         $lines | Select-Object -Skip $dataStartIndex | ForEach-Object {
             $parsed = _Parse-WingetListLine -Line $_
             if (-not $parsed) { return } # Ignorar líneas en blanco o malformadas
@@ -349,7 +351,7 @@ function _Update-Package {
         $chocoArgs = @("upgrade", $pkg.installId, "-y")
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "choco" -ArgumentList ($chocoArgs -join ' ') -FailureStrings "not found", "was not found"
     } else { # Winget
-        # Winget upgrade is the same as install
+        # Winget 'upgrade' es funcionalmente idéntico a 'install' para un paquete ya instalado.
         $wingetArgs = @("install", "--id", $pkg.installId, "--accept-package-agreements", "--accept-source-agreements")
         _Execute-SoftwareJob -PackageName $Item.DisplayName -Executable "winget" -ArgumentList ($wingetArgs -join ' ') -FailureStrings "No package found"
     }
@@ -402,7 +404,7 @@ function _Invoke-SinglePackageMenu {
                 $exitMenu = $true
             }
             'D' {
-                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Está seguro que desea desinstalar $($Item.DisplayName)?") -eq 'S') {
+                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea desinstalar $($Item.DisplayName)?") -eq 'S') {
                     _Uninstall-Package -Manager $Manager -Item $Item
                     if ($Manager -eq 'Chocolatey') { $script:chocolateyStatusCache = $null } else { $script:wingetStatusCache = $null }
                 }
@@ -413,7 +415,9 @@ function _Invoke-SinglePackageMenu {
     }
 }
 
-# Variables de caché a nivel de script para el estado de los paquetes
+# Variables de caché a nivel de script para el estado de los paquetes.
+# Esto evita tener que consultar a choco/winget cada vez que se redibuja el menú,
+# mejorando drásticamente el rendimiento de la UI.
 $script:chocolateyStatusCache = $null
 $script:wingetStatusCache = $null
 
@@ -437,6 +441,7 @@ function Invoke-SoftwareManagerUI {
     }
 
     # Asignar dinámicamente la función de estado y el nombre de la variable de caché.
+    # Esto evita un bloque if/else y hace el código más limpio.
     $statusFunctionName = "_Get-${Manager}PackageStatus"
     $cacheVariableName = "script:${Manager}StatusCache"
 
@@ -447,6 +452,7 @@ function Invoke-SoftwareManagerUI {
         if ($null -eq $packageStatusList) {
             Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para ${Manager} (puede tardar)..."
             $packageStatusList = & (Get-Command $statusFunctionName) -CatalogPackages $catalogPackages
+            # Guardar el resultado en la caché para usos futuros.
             Set-Variable -Name $cacheVariableName -Value $packageStatusList
         }
 
@@ -476,7 +482,7 @@ function Invoke-SoftwareManagerUI {
         switch ($choice) {
             'A' {
                 _Invoke-ProcessPendingPackages -Manager $Manager -PackageStatusList $packageStatusList
-                Set-Variable -Name $cacheVariableName -Value $null # Invalidar caché
+                Set-Variable -Name $cacheVariableName -Value $null # Invalidar caché porque se han realizado cambios.
             }
             'U' {
                 $upgradableItems = $packageStatusList | Where-Object { $_.IsUpgradable }
@@ -489,7 +495,7 @@ function Invoke-SoftwareManagerUI {
                 Pause-And-Return
             }
             'R' {
-                Set-Variable -Name $cacheVariableName -Value $null # Invalidar caché
+                Set-Variable -Name $cacheVariableName -Value $null # Invalidar caché para forzar la recarga.
             }
             '0' { $exitManagerUI = $true }
             default { # Es un número (selección de paquete individual)
@@ -513,7 +519,7 @@ function Invoke-Phase2_PreFlightChecks {
     if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
         Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
         Write-Styled -Type Consent -Message "El gestor de paquetes Chocolatey no está instalado y es requerido para esta fase."
-        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea que el script intente instalarlo ahora?") -eq 'S') {
+        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?") -eq 'S') {
             Write-Styled -Type Info -Message "Instalando Chocolatey... Esto puede tardar unos minutos."
             try {
                 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
@@ -544,7 +550,7 @@ function Invoke-Phase2_PreFlightChecks {
     if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
         Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
         Write-Styled -Type Consent -Message "El módulo de PowerShell para Winget es recomendado para una operación robusta."
-        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea que el script intente instalarlo ahora?") -eq 'S') {
+        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?") -eq 'S') {
             Write-Styled -Type Info -Message "Instalando módulo 'Microsoft.WinGet.Client'..."
             try {
                 Install-Module -Name Microsoft.WinGet.Client -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
@@ -601,7 +607,7 @@ function Invoke-SoftwareSearchAndInstall {
 
 function Invoke-Phase2_SoftwareMenu {
     param([string]$CatalogPath)
-    
+
     if (-not (Invoke-Phase2_PreFlightChecks)) {
         return # Salir si las comprobaciones fallan
     }
@@ -634,7 +640,7 @@ function Invoke-Phase2_SoftwareMenu {
             }
             '3' {
                 Write-Styled -Type Consent -Message "Esta opción instalará TODOS los paquetes no instalados de AMBOS catálogos."
-                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro que desea continuar?") -eq 'S') {
+                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?") -eq 'S') {
                     # Lógica de instalación masiva
                     $catalogs = @(
                         @{ Manager = 'Chocolatey'; CatalogFile = $chocoCatalogFile },

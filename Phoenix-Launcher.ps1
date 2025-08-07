@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Orquestador central para el motor de aprovisionamiento Fénix.
 .DESCRIPTION
@@ -10,18 +10,18 @@
     Requiere: Privilegios de Administrador. Estructura de directorios modular.
 #>
 
-# SECCIÓN 0: CONFIGURACIÓN DE CODIFICACIÓN UNIVERSAL
+# SECCIÃ“N 0: CONFIGURACIÃ“N DE CODIFICACIÃ“N UNIVERSAL
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# SECCIÓN 1: AUTO-ELEVACIÓN DE PRIVILEGIOS
+# SECCIÃ“N 1: AUTO-ELEVACIÃ“N DE PRIVILEGIOS
 if (-not ([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Warning "Se requieren privilegios de Administrador. Relanzando..."
     Start-Process powershell -Verb RunAs -ArgumentList "-File `"$($myinvocation.mycommand.definition)`""
     exit
 }
 
-# SECCIÓN 2: DEFINICIÓN DE RUTAS Y LOGGING
+# SECCIÃ“N 2: DEFINICIÃ“N DE RUTAS Y LOGGING
 $modulesPath = Join-Path $PSScriptRoot "modules"
 $assetsPath = Join-Path $PSScriptRoot "assets"
 $catalogsPath = Join-Path $assetsPath "catalogs"
@@ -31,7 +31,7 @@ $logFile = Join-Path $PSScriptRoot "Provision-Log-Phoenix-$((Get-Date).ToString(
 try { Stop-Transcript | Out-Null } catch {}
 Start-Transcript -Path $logFile
 
-# SECCIÓN 3: CARGA DE MÓDULOS (DOT-SOURCING)
+# SECCIÃ“N 3: CARGA DE MÃ“DULOS (DOT-SOURCING)
 try {
     . (Join-Path $modulesPath "Phoenix-Utils.ps1")
     . (Join-Path $modulesPath "Phase1-OneDrive.ps1")
@@ -46,18 +46,18 @@ try {
     exit
 }
 
-# SECCIÓN 3.1: VERIFICACIÓN DE CODIFICACIÓN DE FICHEROS
+# SECCIÃ“N 3.1: VERIFICACIÃ“N DE CODIFICACIÃ“N DE FICHEROS
 Invoke-EnsureFileEncoding -BasePath $PSScriptRoot -Extensions @("*.ps1", "*.json", "*.md", "*.txt")
 Write-Host # Add a newline for spacing
 
-# SECCIÓN 3.5: VERIFICACIÓN INICIAL DE INTERNET
+# SECCIÃ“N 3.5: VERIFICACIÃ“N INICIAL DE INTERNET
 if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
     Write-Styled -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."
     Read-Host "Presione Enter para salir."
     exit
 }
 
-# SECCIÓN 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
+# SECCIÃ“N 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
 $global:RebootIsPending = $false
 Clear-Host
 Show-Header -Title "Motor de Aprovisionamiento Fénix v3.0" -NoClear
@@ -74,7 +74,7 @@ if ($consent -ne 'S') {
     exit
 }
 
-# SECCIÓN 5: BUCLE DE CONTROL PRINCIPAL (SIMPLIFICADO)
+# SECCIÃ“N 5: BUCLE DE CONTROL PRINCIPAL (SIMPLIFICADO)
 $mainMenuOptions = @(
     @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-Phase1_OneDrive; Pause-And-Return } },
     @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-Phase2_SoftwareMenu -CatalogPath $catalogsPath } },
@@ -87,12 +87,12 @@ function Show-MainMenu {
     param([array]$menuOptions, [switch]$NoClear)
     Show-Header -Title "Motor de Aprovisionamiento Fénix v3.0" -NoClear:$NoClear
     Write-Styled -Type Info -Message "Toda la salida se registrará en: $logFile`n"
-    
+
     for ($i = 0; $i -lt $menuOptions.Count; $i++) {
         $option = $menuOptions[$i]
         Write-Styled -Type Step -Message "[$($i+1)] $($option.Description)"
     }
-    
+
     Write-Styled -Type Step -Message "[R] Refrescar Menú"
     Write-Styled -Type Step -Message "[Q] Salir"
     Write-Host
@@ -104,7 +104,7 @@ try {
     while (-not $exitMainMenu) {
         Show-MainMenu -menuOptions $mainMenuOptions -NoClear:(-not $firstRun)
         $firstRun = $false
-        
+
         $numericChoices = 1..$mainMenuOptions.Count
         $validChoices = @($numericChoices) + @('R', 'Q')
         $choice = Invoke-MenuPrompt -ValidChoices $validChoices

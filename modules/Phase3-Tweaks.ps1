@@ -1,12 +1,13 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de Fase 3 para la aplicación de optimizaciones y configuraciones del sistema.
 .DESCRIPTION
     Presenta un menú interactivo de "tweaks" del sistema, con verificación de estado
-    precisa y manejo de errores robusto (en teoría), incluyendo manipulación de ACL para claves protegidas.
+    precisa y manejo de errores robusto, incluyendo manipulación de ACL para claves protegidas.
 .NOTES
-    Versión: 5.0
+    Versión: 5.1
     Autor: miguel-cinsfran
+    Revisión: Corregida la codificación de caracteres y mejorada la legibilidad.
 #>
 
 #region Tweak Type Helpers
@@ -74,7 +75,7 @@ function _Apply-Tweak-AppxPackage {
     if ($Tweak.details.state -eq 'Removed') {
         $package = Get-AppxPackage -Name $Tweak.details.packageName -ErrorAction SilentlyContinue
         if ($package) {
-            # Log the package details before removing it.
+            # Registrar los detalles del paquete antes de eliminarlo para trazabilidad.
             $logFile = Join-Path $PSScriptRoot "..\\removed_packages.log"
             $logEntry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Removed: $($package.Name) (Version: $($package.Version), ID: $($package.PackageFamilyName))"
             Add-Content -Path $logFile -Value $logEntry -Encoding UTF8
@@ -130,7 +131,7 @@ function _Execute-TweakAction {
     )
     $actionVerb = if ($Action -eq "Apply") { "Aplicando" } else { "Revirtiendo" }
     Write-Styled -Message "$actionVerb ajuste para '$($Tweak.description)'..." -NoNewline
-    
+
     $needsExplorerRestart = $Tweak.type -like "*WithExplorerRestart"
     if ($needsExplorerRestart) { Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1 }
 
@@ -147,7 +148,7 @@ function _Execute-TweakAction {
         Write-Host " [FALLO]" -F $Global:Theme.Error
         Write-Styled -Type Log -Message "Error al $actionVerb '$($Tweak.id)': $($_.Exception.Message)"
     }
-    
+
     if ($needsExplorerRestart) { Start-Process explorer.exe | Out-Null }
     if ($Tweak.rebootRequired) { $global:RebootIsPending = $true }
     return $success
@@ -208,7 +209,7 @@ function Invoke-Phase3_Tweaks {
                 $items = $tweakStatusList | Where-Object { $_.Status -eq 'Aplicado' }
                 if ($items.Count -eq 0) { Write-Styled -Type Info -Message "No hay ajustes aplicados para revertir."; Start-Sleep -Seconds 2 }
                 else {
-                     if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Seguro que desea revertir $($items.count) ajustes?") -eq 'S') {
+                     if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?") -eq 'S') {
                         foreach($item in $items) { _Execute-TweakAction -Action "Revert" -Tweak $item.Tweak }
                         $actionTaken = $true
                      }
@@ -222,7 +223,7 @@ function Invoke-Phase3_Tweaks {
                     _Execute-TweakAction -Action "Apply" -Tweak $selectedItem.Tweak
                     $actionTaken = $true
                 } elseif ($selectedItem.Status -eq 'Aplicado') {
-                    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Seguro que desea revertir '$($selectedItem.Tweak.description)'?") -eq 'S') {
+                    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?") -eq 'S') {
                         _Execute-TweakAction -Action "Revert" -Tweak $selectedItem.Tweak
                         $actionTaken = $true
                     }
@@ -230,7 +231,7 @@ function Invoke-Phase3_Tweaks {
                     if ($selectedItem.Status -eq 'Aplicado (No Reversible)') {
                         if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?") -eq 'S') {
                             Invoke-SoftwareSearchAndInstall
-                            $actionTaken = $true # Pause after this returns
+                            $actionTaken = $true # Pausar después de que la función de búsqueda retorne.
                         }
                     } else {
                         Write-Styled -Type Warn -Message "Este ajuste no se puede cambiar (Estado: $($selectedItem.Status))"
