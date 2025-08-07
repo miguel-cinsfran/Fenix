@@ -10,8 +10,8 @@
     Revisión: Refactorizado para mayor legibilidad y robustez.
 #>
 
-function Audit-And-Repair-UserShellFolders {
-    Write-Styled -Type Step -Message "Auditando rutas de carpetas de usuario en el Registro..."
+function Repair-UserShellFolderPaths {
+    Write-PhoenixStyledOutput -Type Step -Message "Auditando rutas de carpetas de usuario en el Registro..."
     $keysToAudit = @(
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
@@ -28,21 +28,21 @@ function Audit-And-Repair-UserShellFolders {
                 }
             }
         } catch {
-            Write-Styled -Type Warn -Message "No se pudo auditar la clave del Registro: $keyPath"
+            Write-PhoenixStyledOutput -Type Warn -Message "No se pudo auditar la clave del Registro: $keyPath"
         }
     }
 
     if ($issuesFound.Count -eq 0) {
-        Write-Styled -Type Success -Message "Auditoría finalizada. No se encontraron rutas de OneDrive en el Registro."
+        Write-PhoenixStyledOutput -Type Success -Message "Auditoría finalizada. No se encontraron rutas de OneDrive en el Registro."
         return
     }
 
-    Write-Styled -Type Warn -Message "Se encontraron $($issuesFound.Count) rutas del Registro apuntando a OneDrive:"
-    $issuesFound | ForEach-Object { Write-Styled -Type Info -Message "  $($_.Name) = '$($_.BadValue)'" }
-    Write-Styled -Type Consent -Message "`nADVERTENCIA: La reparación de estas rutas es una operación de alto riesgo."
+    Write-PhoenixStyledOutput -Type Warn -Message "Se encontraron $($issuesFound.Count) rutas del Registro apuntando a OneDrive:"
+    $issuesFound | ForEach-Object { Write-PhoenixStyledOutput -Type Info -Message "  $($_.Name) = '$($_.BadValue)'" }
+    Write-PhoenixStyledOutput -Type Consent -Message "`nADVERTENCIA: La reparación de estas rutas es una operación de alto riesgo."
 
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a intentar corregir estas entradas?") -eq 'S') {
-        Write-Styled -Type SubStep -Message "Reparando claves del Registro..."
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a intentar corregir estas entradas?") -eq 'S') {
+        Write-PhoenixStyledOutput -Type SubStep -Message "Reparando claves del Registro..."
         try {
             $issuesFound | ForEach-Object {
                 # Reemplaza la parte de la ruta que contiene OneDrive con el perfil de usuario base.
@@ -57,44 +57,44 @@ function Audit-And-Repair-UserShellFolders {
 
                 # Asegurarse de que el tipo de dato sea ExpandString para que %USERPROFILE% funcione.
                 Set-ItemProperty -Path $_.Key -Name $_.Name -Value $newValue -Type ExpandString -ErrorAction Stop
-                Write-Styled -Type Log -Message "Clave '$($_.Name)' actualizada a '$newValue'."
+                Write-PhoenixStyledOutput -Type Log -Message "Clave '$($_.Name)' actualizada a '$newValue'."
             }
-            Write-Styled -Type Success -Message "Reparación de claves del Registro completada."
-            Write-Styled -Type Info -Message "Reiniciando el Explorador de Windows para aplicar los cambios..."
+            Write-PhoenixStyledOutput -Type Success -Message "Reparación de claves del Registro completada."
+            Write-PhoenixStyledOutput -Type Info -Message "Reiniciando el Explorador de Windows para aplicar los cambios..."
             Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
             # El explorador se reiniciará automáticamente.
-            Invoke-RestartPrompt
+            Confirm-SystemRestart
         } catch {
-            Write-Styled -Type Error -Message "No se pudieron reparar las claves del Registro: $($_.Exception.Message)"
+            Write-PhoenixStyledOutput -Type Error -Message "No se pudieron reparar las claves del Registro: $($_.Exception.Message)"
         }
     } else {
-        Write-Styled -Type Error -Message "Consentimiento no otorgado. El Registro no ha sido modificado."
-        Write-Styled -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Corrija manualmente las rutas del registro que apuntan a OneDrive."
+        Write-PhoenixStyledOutput -Type Error -Message "Consentimiento no otorgado. El Registro no ha sido modificado."
+        Write-PhoenixStyledOutput -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Corrija manualmente las rutas del registro que apuntan a OneDrive."
     }
 }
 
-function Invoke-Phase1_OneDrive {
-    Show-Header -Title "FASE 1: Erradicación de OneDrive"
-    Write-Styled -Type Consent -Message "Esta fase detendrá procesos, desinstalará OneDrive y purgará sus rastros del sistema."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea proceder con la erradicación completa de OneDrive?") -ne 'S') {
-        Write-Styled -Type Warn -Message "Operación cancelada por el usuario."
+function Invoke-OneDrivePhase {
+    Show-PhoenixHeader -Title "FASE 1: Erradicación de OneDrive"
+    Write-PhoenixStyledOutput -Type Consent -Message "Esta fase detendrá procesos, desinstalará OneDrive y purgará sus rastros del sistema."
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea proceder con la erradicación completa de OneDrive?") -ne 'S') {
+        Write-PhoenixStyledOutput -Type Warn -Message "Operación cancelada por el usuario."
         Start-Sleep -Seconds 2
         return
     }
 
     try {
         # 1. Detener procesos de OneDrive
-        Write-Styled -Type Step -Message "Deteniendo procesos de OneDrive..."
+        Write-PhoenixStyledOutput -Type Step -Message "Deteniendo procesos de OneDrive..."
         $oneDriveProcesses = Get-Process OneDrive -ErrorAction SilentlyContinue
         if ($oneDriveProcesses) {
             $oneDriveProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
-            Write-Styled -Type Success -Message "Procesos de OneDrive detenidos."
+            Write-PhoenixStyledOutput -Type Success -Message "Procesos de OneDrive detenidos."
         } else {
-            Write-Styled -Type Info -Message "No se encontraron procesos de OneDrive en ejecución."
+            Write-PhoenixStyledOutput -Type Info -Message "No se encontraron procesos de OneDrive en ejecución."
         }
 
         # 2. Lanzar desinstaladores
-        Write-Styled -Type Step -Message "Ejecutando desinstaladores de OneDrive..."
+        Write-PhoenixStyledOutput -Type Step -Message "Ejecutando desinstaladores de OneDrive..."
         $uninstallerPaths = @(
             "$env:SystemRoot\SysWOW64\OneDriveSetup.exe",
             "$env:SystemRoot\System32\OneDriveSetup.exe"
@@ -103,25 +103,25 @@ function Invoke-Phase1_OneDrive {
 
         if ($uninstallersFound) {
             foreach ($path in $uninstallersFound) {
-                Write-Styled -Type SubStep -Message "Iniciando desinstalador: $path"
+                Write-PhoenixStyledOutput -Type SubStep -Message "Iniciando desinstalador: $path"
                 try {
                     $process = Start-Process -FilePath $path -ArgumentList "/uninstall /silent /quiet" -Wait -PassThru -ErrorAction Stop
                     if ($process.ExitCode -ne 0) {
-                        Write-Styled -Type Warn -Message "El desinstalador en '$path' finalizó con el código de salida: $($process.ExitCode)."
+                        Write-PhoenixStyledOutput -Type Warn -Message "El desinstalador en '$path' finalizó con el código de salida: $($process.ExitCode)."
                     } else {
-                        Write-Styled -Type SubStep -Message "El desinstalador en '$path' se ejecutó correctamente."
+                        Write-PhoenixStyledOutput -Type SubStep -Message "El desinstalador en '$path' se ejecutó correctamente."
                     }
                 } catch {
-                    Write-Styled -Type Error -Message "Falló el lanzamiento del desinstalador en '$path': $($_.Exception.Message)"
+                    Write-PhoenixStyledOutput -Type Error -Message "Falló el lanzamiento del desinstalador en '$path': $($_.Exception.Message)"
                 }
             }
-            Write-Styled -Type Success -Message "Proceso de desinstalación finalizado."
+            Write-PhoenixStyledOutput -Type Success -Message "Proceso de desinstalación finalizado."
         } else {
-            Write-Styled -Type Warn -Message "No se encontraron ejecutables de desinstalación de OneDrive."
+            Write-PhoenixStyledOutput -Type Warn -Message "No se encontraron ejecutables de desinstalación de OneDrive."
         }
 
         # 3. Aplicar GPO para deshabilitar OneDrive
-        Write-Styled -Type Step -Message "Configurando Política de Grupo para deshabilitar OneDrive..."
+        Write-PhoenixStyledOutput -Type Step -Message "Configurando Política de Grupo para deshabilitar OneDrive..."
         $osInfo = Get-CimInstance Win32_OperatingSystem
         # SKU 4 (Enterprise), 48 (Professional), 121 (Pro), 122 (Pro)
         if (@(4, 48, 121, 122) -contains $osInfo.OperatingSystemSKU) {
@@ -131,26 +131,26 @@ function Invoke-Phase1_OneDrive {
                     New-Item -Path $gpoPath -Force -ErrorAction Stop | Out-Null
                 }
                 Set-ItemProperty -Path $gpoPath -Name "DisableFileSyncNGSC" -Value 1 -Type DWord -Force -ErrorAction Stop
-                Write-Styled -Type Success -Message "Política de Grupo aplicada correctamente."
+                Write-PhoenixStyledOutput -Type Success -Message "Política de Grupo aplicada correctamente."
             } catch {
-                Write-Styled -Type Error -Message "No se pudo aplicar la Política de Grupo: $($_.Exception.Message)"
+                Write-PhoenixStyledOutput -Type Error -Message "No se pudo aplicar la Política de Grupo: $($_.Exception.Message)"
             }
         } else {
-            Write-Styled -Type Warn -Message "La edición de Windows no soporta GPO. Omitiendo este paso."
+            Write-PhoenixStyledOutput -Type Warn -Message "La edición de Windows no soporta GPO. Omitiendo este paso."
         }
 
         # 4. Purgar tareas programadas
-        Write-Styled -Type Step -Message "Purgando tareas programadas de OneDrive..."
+        Write-PhoenixStyledOutput -Type Step -Message "Purgando tareas programadas de OneDrive..."
         $tasks = Get-ScheduledTask -TaskPath "\*" -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like "*OneDrive*" }
         if ($tasks) {
             $tasks | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue
-            Write-Styled -Type Success -Message "Tareas programadas de OneDrive eliminadas."
+            Write-PhoenixStyledOutput -Type Success -Message "Tareas programadas de OneDrive eliminadas."
         } else {
-            Write-Styled -Type Info -Message "No se encontraron tareas programadas de OneDrive."
+            Write-PhoenixStyledOutput -Type Info -Message "No se encontraron tareas programadas de OneDrive."
         }
 
         # 5. Purgar claves del Explorador (Namespace)
-        Write-Styled -Type Step -Message "Purgando claves de integración del Explorador..."
+        Write-PhoenixStyledOutput -Type Step -Message "Purgando claves de integración del Explorador..."
         $explorerKeys = @(
             "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}",
             "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
@@ -159,33 +159,33 @@ function Invoke-Phase1_OneDrive {
             if (Test-Path $key) {
                 try {
                     Remove-Item -Path $key -Recurse -Force -ErrorAction Stop
-                    Write-Styled -Type SubStep -Message "Clave eliminada: $key"
+                    Write-PhoenixStyledOutput -Type SubStep -Message "Clave eliminada: $key"
                 } catch {
-                    Write-Styled -Type Warn -Message "No se pudo eliminar la clave '$key': $($_.Exception.Message)"
+                    Write-PhoenixStyledOutput -Type Warn -Message "No se pudo eliminar la clave '$key': $($_.Exception.Message)"
                 }
             }
         }
-        Write-Styled -Type Success -Message "Limpieza de claves del Explorador finalizada."
+        Write-PhoenixStyledOutput -Type Success -Message "Limpieza de claves del Explorador finalizada."
 
         # 6. Purgar accesos directos del menú de inicio
-        Write-Styled -Type Step -Message "Purgando accesos directos del menú de inicio..."
+        Write-PhoenixStyledOutput -Type Step -Message "Purgando accesos directos del menú de inicio..."
         $startMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk"
         if (Test-Path $startMenuPath) {
             Remove-Item $startMenuPath -Force -ErrorAction SilentlyContinue
-            Write-Styled -Type Success -Message "Acceso directo de OneDrive eliminado."
+            Write-PhoenixStyledOutput -Type Success -Message "Acceso directo de OneDrive eliminado."
         } else {
-            Write-Styled -Type Info -Message "No se encontró el acceso directo de OneDrive en el menú de inicio."
+            Write-PhoenixStyledOutput -Type Info -Message "No se encontró el acceso directo de OneDrive en el menú de inicio."
         }
 
         # 7. Auditar y reparar rutas del registro de usuario
-        Audit-And-Repair-UserShellFolders
+        Repair-UserShellFolderPaths
 
-        Write-Styled -Type Success -Message "La erradicación de OneDrive ha finalizado."
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Success -Message "La erradicación de OneDrive ha finalizado."
+        Request-Continuation
 
     } catch {
-        Write-Styled -Type Error -Message "Error fatal en la erradicación de OneDrive: $($_.Exception.Message)"
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Error -Message "Error fatal en la erradicación de OneDrive: $($_.Exception.Message)"
+        Request-Continuation
     }
 }
 

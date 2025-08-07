@@ -8,18 +8,18 @@ function Invoke-WingetCli {
         [string]$ArgumentList
     )
 
-    $result = Invoke-NativeCommand -Executable "winget" -ArgumentList $ArgumentList -FailureStrings "No package found" -Activity "Ejecutando: winget ${ArgumentList}" -IdleTimeoutEnabled $false
+    $result = Invoke-NativeCommandWithOutputCapture -Executable "winget" -ArgumentList $ArgumentList -FailureStrings "No package found" -Activity "Ejecutando: winget ${ArgumentList}" -IdleTimeoutEnabled $false
 
     if (-not $result.Success) {
-        Write-Styled -Type Error -Message "Falló la operación de Winget para ${PackageName}."
+        Write-PhoenixStyledOutput -Type Error -Message "Falló la operación de Winget para ${PackageName}."
         if ($result.Output) {
-            Write-Styled -Type Log -Message "--- INICIO DE SALIDA DEL PROCESO ---"
-            $result.Output | ForEach-Object { Write-Styled -Type Log -Message $_ }
-            Write-Styled -Type Log -Message "--- FIN DE SALIDA DEL PROCESO ---"
+            Write-PhoenixStyledOutput -Type Log -Message "--- INICIO DE SALIDA DEL PROCESO ---"
+            $result.Output | ForEach-Object { Write-PhoenixStyledOutput -Type Log -Message $_ }
+            Write-PhoenixStyledOutput -Type Log -Message "--- FIN DE SALIDA DEL PROCESO ---"
         }
         throw "La operación de Winget para ${PackageName} falló."
     } else {
-        Write-Styled -Type Success -Message "Operación de Winget para ${PackageName} finalizada."
+        Write-PhoenixStyledOutput -Type Success -Message "Operación de Winget para ${PackageName} finalizada."
     }
 }
 
@@ -51,10 +51,10 @@ function _Parse-WingetListLine {
 function _Get-PackageStatus_Cli {
     param([array]$CatalogPackages)
 
-    Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget (CLI)..."
-    $listResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "list --include-unknown --accept-source-agreements --disable-interactivity" -Activity "Listando todos los paquetes de Winget"
+    Write-PhoenixStyledOutput -Type Info -Message "Consultando todos los paquetes de Winget (CLI)..."
+    $listResult = Invoke-NativeCommandWithOutputCapture -Executable "winget" -ArgumentList "list --include-unknown --accept-source-agreements --disable-interactivity" -Activity "Listando todos los paquetes de Winget"
     if (-not $listResult.Success) {
-        Write-Styled -Type Error -Message "El comando 'winget list' falló."; return $null
+        Write-PhoenixStyledOutput -Type Error -Message "El comando 'winget list' falló."; return $null
     }
 
     $installedById = @{}; $installedByName = @{}; $upgradableById = @{}; $upgradableByName = @{}
@@ -63,7 +63,7 @@ function _Get-PackageStatus_Cli {
     while ($dataStartIndex -lt $lines.Length -and $lines[$dataStartIndex] -notmatch '^-+$') { $dataStartIndex++ }
     $dataStartIndex++
     if ($dataStartIndex -ge $lines.Length) {
-        Write-Styled -Type Warn -Message "No se encontraron datos de paquetes en la salida de winget."
+        Write-PhoenixStyledOutput -Type Warn -Message "No se encontraron datos de paquetes en la salida de winget."
     }
     else {
         $lines | Select-Object -Skip $dataStartIndex | ForEach-Object {
@@ -99,7 +99,7 @@ function _Get-PackageStatus_Cli {
         return @{ Status = $status; VersionInfo = $versionInfo; IsUpgradable = $isUpgradable }
     }
 
-    return Invoke-ProcessPackageCatalog -ManagerName 'Winget (CLI)' -CatalogPackages $CatalogPackages -StatusCheckBlock $statusCheckBlock
+    return Get-PackageStatusFromCatalog -ManagerName 'Winget (CLI)' -CatalogPackages $CatalogPackages -StatusCheckBlock $statusCheckBlock
 }
 
 function Get-PackageStatus {
@@ -112,11 +112,11 @@ function Get-PackageStatus {
     try {
         Import-Module Microsoft.WinGet.Client -ErrorAction Stop
     } catch {
-        Write-Styled -Type Error -Message "No se pudo importar el módulo 'Microsoft.WinGet.Client'."; Write-Styled -Type Warn -Message "Cambiando a método de reserva para Winget."
+        Write-PhoenixStyledOutput -Type Error -Message "No se pudo importar el módulo 'Microsoft.WinGet.Client'."; Write-PhoenixStyledOutput -Type Warn -Message "Cambiando a método de reserva para Winget."
         return _Get-PackageStatus_Cli -CatalogPackages $CatalogPackages
     }
 
-    Write-Styled -Type Info -Message "Consultando todos los paquetes de Winget a través del módulo..."
+    Write-PhoenixStyledOutput -Type Info -Message "Consultando todos los paquetes de Winget a través del módulo..."
     $installedVersionsById = @{}; $installedVersionsByName = @{}
     $upgradableVersionsById = @{}; $upgradableVersionsByName = @{}
     try {
@@ -133,7 +133,7 @@ function Get-PackageStatus {
             if ($null -ne $upgradableByName) { $upgradableByName.GetEnumerator() | ForEach-Object { $upgradableVersionsByName[$_.Name] = @{ Current = $_.Value[0].InstalledVersion; Available = $_.Value[0].AvailableVersion } } }
         }
     } catch {
-        Write-Styled -Type Error -Message "Fallo crítico al obtener la lista de paquetes de Winget: $($_.Exception.Message)"; return $null
+        Write-PhoenixStyledOutput -Type Error -Message "Fallo crítico al obtener la lista de paquetes de Winget: $($_.Exception.Message)"; return $null
     }
 
     $statusCheckBlock = {
@@ -156,7 +156,7 @@ function Get-PackageStatus {
         return @{ Status = $status; VersionInfo = $versionInfo; IsUpgradable = $isUpgradable }
     }
 
-    return Invoke-ProcessPackageCatalog -ManagerName 'Winget' -CatalogPackages $CatalogPackages -StatusCheckBlock $statusCheckBlock
+    return Get-PackageStatusFromCatalog -ManagerName 'Winget' -CatalogPackages $CatalogPackages -StatusCheckBlock $statusCheckBlock
 }
 
 function Install-Package {
@@ -169,7 +169,7 @@ function Install-Package {
     Invoke-WingetCli -PackageName $Item.DisplayName -ArgumentList ($wingetArgs -join ' ')
 
     if ($pkg.PSObject.Properties.Match('postInstallConfig') -and $pkg.postInstallConfig) {
-        Invoke-PostInstallConfiguration -Package $pkg
+        Start-PostInstallConfiguration -Package $pkg
     }
     if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
 }
@@ -193,7 +193,7 @@ function Update-Package {
     Invoke-WingetCli -PackageName $Item.DisplayName -ArgumentList ($wingetArgs -join ' ')
 
     if ($pkg.PSObject.Properties.Match('postInstallConfig') -and $pkg.postInstallConfig) {
-        Invoke-PostInstallConfiguration -Package $pkg
+        Start-PostInstallConfiguration -Package $pkg
     }
     if ($pkg.rebootRequired) { $global:RebootIsPending = $true }
 }

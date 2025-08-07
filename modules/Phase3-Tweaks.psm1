@@ -90,7 +90,7 @@ function _Apply-Tweak-ProtectedRegistry {
     $action = {
         _Apply-Tweak-Registry -Tweak $Tweak
     }
-    Invoke-ProtectedRegistryAction -KeyPath $details.path -Action $action
+    Invoke-RegistryActionWithPrivileges -KeyPath $details.path -Action $action
 }
 
 
@@ -112,50 +112,50 @@ function _Revert-Tweak-RegistryWithExplorerRestart { param($Tweak) _Revert-Tweak
 function _Revert-Tweak-PowerPlan { param($Tweak) powercfg.exe /setactive $Tweak.revert_details.schemeGuid }
 function _Revert-Tweak-Service { param($Tweak) Set-Service -Name $Tweak.details.name -StartupType $Tweak.revert_details.startupType }
 function _Revert-Tweak-PowerShellCommand { param($Tweak) Invoke-Expression -Command "$($Tweak.revert_details.command) $($Tweak.revert_details.arguments)" }
-function _Revert-Tweak-AppxPackage { param($Tweak) Write-Styled -Type Warn -Message "La reversión para '$($Tweak.description)' no está soportada." }
+function _Revert-Tweak-AppxPackage { param($Tweak) Write-PhoenixStyledOutput -Type Warn -Message "La reversión para '$($Tweak.description)' no está soportada." }
 function _Revert-Tweak-ProtectedRegistry {
     param($Tweak)
     $details = $Tweak.details
     $action = {
         _Revert-Tweak-Registry -Tweak $Tweak
     }
-    Invoke-ProtectedRegistryAction -KeyPath $details.path -Action $action
+    Invoke-RegistryActionWithPrivileges -KeyPath $details.path -Action $action
 }
 
-function _Invoke-SoftwareSearchAndInstall {
+function Invoke-SoftwareSearchAndInstall {
     [CmdletBinding()]
     param()
 
-    Show-Header -Title "Búsqueda e Instalación de Paquetes (Winget)"
+    Show-PhoenixHeader -Title "Búsqueda e Instalación de Paquetes (Winget)"
     $searchTerm = Read-Host "Introduzca el nombre o ID del paquete a buscar"
     if (-not $searchTerm) { return }
 
-    Write-Styled -Type Info -Message "Buscando '$($searchTerm)' con Winget..."
-    $searchResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "search `"$searchTerm`" --accept-source-agreements" -Activity "Buscando en Winget"
+    Write-PhoenixStyledOutput -Type Info -Message "Buscando '$($searchTerm)' con Winget..."
+    $searchResult = Invoke-NativeCommandWithOutputCapture -Executable "winget" -ArgumentList "search `"$searchTerm`" --accept-source-agreements" -Activity "Buscando en Winget"
 
     if (-not $searchResult.Success -or $searchResult.Output -match "No package found matching input criteria") {
-        Write-Styled -Type Error -Message "No se encontraron paquetes que coincidan con '$searchTerm'."
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Error -Message "No se encontraron paquetes que coincidan con '$searchTerm'."
+        Request-Continuation
         return
     }
 
     Write-Host $searchResult.Output
-    Write-Styled -Type Consent -Message "Se encontraron los paquetes de arriba."
+    Write-PhoenixStyledOutput -Type Consent -Message "Se encontraron los paquetes de arriba."
     $idToInstall = Read-Host "Escriba el ID exacto del paquete que desea instalar (o presione Enter para cancelar)"
 
     if ($idToInstall) {
-        Invoke-NativeCommand -Executable "winget" -ArgumentList "install --id $idToInstall --accept-package-agreements --accept-source-agreements" -Activity "Instalando $idToInstall"
+        Invoke-NativeCommandWithOutputCapture -Executable "winget" -ArgumentList "install --id $idToInstall --accept-package-agreements --accept-source-agreements" -Activity "Instalando $idToInstall"
     }
 }
 #endregion
 
-function _Execute-TweakAction {
+function Invoke-TweakAction {
     param(
         [string]$Action, # "Apply" or "Revert"
         [PSCustomObject]$Tweak
     )
     $actionVerb = if ($Action -eq "Apply") { "Aplicando" } else { "Revirtiendo" }
-    Write-Styled -Message "$actionVerb ajuste para '$($Tweak.description)'..." -NoNewline
+    Write-PhoenixStyledOutput -Message "$actionVerb ajuste para '$($Tweak.description)'..." -NoNewline
 
     $needsExplorerRestart = $Tweak.type -like "*WithExplorerRestart"
     if ($needsExplorerRestart) { Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1 }
@@ -171,7 +171,7 @@ function _Execute-TweakAction {
         Write-Host " [ÉXITO]" -F $Global:Theme.Success
     } catch {
         Write-Host " [FALLO]" -F $Global:Theme.Error
-        Write-Styled -Type Log -Message "Error al $actionVerb '$($Tweak.id)': $($_.Exception.Message)"
+        Write-PhoenixStyledOutput -Type Log -Message "Error al $actionVerb '$($Tweak.id)': $($_.Exception.Message)"
     }
 
     if ($needsExplorerRestart) { Start-Process explorer.exe | Out-Null }
@@ -179,7 +179,7 @@ function _Execute-TweakAction {
     return $success
 }
 
-function Invoke-Phase3_Tweaks {
+function Invoke-TweaksPhase {
     param([string]$CatalogPath)
 
     try {
@@ -189,19 +189,19 @@ function Invoke-Phase3_Tweaks {
         $catalogContent = Get-Content -Raw -Path $CatalogPath -Encoding UTF8
         $catalogJson = $catalogContent | ConvertFrom-Json
 
-        if (-not (Test-JsonIsValid -Path $CatalogPath)) {
+        if (-not (Test-JsonFile -Path $CatalogPath)) {
             throw "El fichero de catálogo '$((Split-Path $CatalogPath -Leaf))' contiene JSON inválido."
         }
         $tweaks = $catalogJson.items
     } catch {
-        Write-Styled -Type Error -Message "Fallo CRÍTICO al leer o procesar el catálogo de tweaks: $($_.Exception.Message)"
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Error -Message "Fallo CRÍTICO al leer o procesar el catálogo de tweaks: $($_.Exception.Message)"
+        Request-Continuation
         return
     }
 
     $exitMenu = $false
     while (-not $exitMenu) {
-        Show-Header -Title "FASE 3: Optimización del Sistema"
+        Show-PhoenixHeader -Title "FASE 3: Optimización del Sistema"
 
         $tweakStatusList = @()
         foreach ($tweak in $tweaks) {
@@ -229,7 +229,7 @@ function Invoke-Phase3_Tweaks {
             'R' = 'Refrescar la lista.'
             '0' = 'Volver al Menú Principal.'
         }
-        $choices = Invoke-StandardMenu -Title "FASE 3: Optimización del Sistema" -MenuItems $menuItems -ActionOptions $actionOptions
+        $choices = Show-PhoenixStandardMenu -Title "FASE 3: Optimización del Sistema" -MenuItems $menuItems -ActionOptions $actionOptions
 
         $actionTaken = $false
 
@@ -238,23 +238,23 @@ function Invoke-Phase3_Tweaks {
         if ($choices -contains 'R') { continue }
         if ($choices -contains 'A') {
             $items = $tweakStatusList | Where-Object { $_.Status -eq 'Pendiente' }
-            if ($items.Count -eq 0) { Write-Styled -Type Info -Message "No hay ajustes pendientes para aplicar."; Start-Sleep -Seconds 2 }
+            if ($items.Count -eq 0) { Write-PhoenixStyledOutput -Type Info -Message "No hay ajustes pendientes para aplicar."; Start-Sleep -Seconds 2 }
             else {
-                foreach($item in $items) { _Execute-TweakAction -Action "Apply" -Tweak $item.Tweak }
+                foreach($item in $items) { Invoke-TweakAction -Action "Apply" -Tweak $item.Tweak }
                 $actionTaken = $true
             }
-            if ($actionTaken) { Pause-And-Return; continue }
+            if ($actionTaken) { Request-Continuation; continue }
         }
         if ($choices -contains 'D') {
             $items = $tweakStatusList | Where-Object { $_.Status -eq 'Aplicado' }
-            if ($items.Count -eq 0) { Write-Styled -Type Info -Message "No hay ajustes aplicados para revertir."; Start-Sleep -Seconds 2 }
+            if ($items.Count -eq 0) { Write-PhoenixStyledOutput -Type Info -Message "No hay ajustes aplicados para revertir."; Start-Sleep -Seconds 2 }
             else {
-                 if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?")[0] -eq 'S') {
-                    foreach($item in $items) { _Execute-TweakAction -Action "Revert" -Tweak $item.Tweak }
+                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?")[0] -eq 'S') {
+                    foreach($item in $items) { Invoke-TweakAction -Action "Revert" -Tweak $item.Tweak }
                     $actionTaken = $true
                  }
             }
-            if ($actionTaken) { Pause-And-Return; continue }
+            if ($actionTaken) { Request-Continuation; continue }
         }
 
         # Procesar selecciones numéricas
@@ -262,26 +262,26 @@ function Invoke-Phase3_Tweaks {
         foreach ($choice in $numericActions) {
             $selectedItem = $tweakStatusList[$choice - 1]
             if ($selectedItem.Status -eq 'Pendiente') {
-                _Execute-TweakAction -Action "Apply" -Tweak $selectedItem.Tweak
+                Invoke-TweakAction -Action "Apply" -Tweak $selectedItem.Tweak
                 $actionTaken = $true
             } elseif ($selectedItem.Status -eq 'Aplicado') {
-                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?") -eq 'S') {
-                    _Execute-TweakAction -Action "Revert" -Tweak $selectedItem.Tweak
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?") -eq 'S') {
+                    Invoke-TweakAction -Action "Revert" -Tweak $selectedItem.Tweak
                     $actionTaken = $true
                 }
             } else {
                 if ($selectedItem.Status -eq 'Aplicado (No Reversible)') {
-                    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?") -eq 'S') {
-                        _Invoke-SoftwareSearchAndInstall
+                    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?") -eq 'S') {
+                        Invoke-SoftwareSearchAndInstall
                         $actionTaken = $true
                     }
                 } else {
-                    Write-Styled -Type Warn -Message "Este ajuste no se puede cambiar (Estado: $($selectedItem.Status))"
+                    Write-PhoenixStyledOutput -Type Warn -Message "Este ajuste no se puede cambiar (Estado: $($selectedItem.Status))"
                     Start-Sleep -Seconds 2
                 }
             }
         }
-        if ($actionTaken) { Pause-And-Return }
+        if ($actionTaken) { Request-Continuation }
     }
 }
 

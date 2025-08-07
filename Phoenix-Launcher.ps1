@@ -70,12 +70,12 @@ try {
 
 # SECCIÓN 3.1: VERIFICACIÓN DE CODIFICACIÓN DE FICHEROS
 # Esta función ahora es parte del módulo de utilidades y debería estar disponible.
-Invoke-EnsureFileEncoding -BasePath $PSScriptRoot -Extensions @("*.ps1", "*.psm1", "*.json", "*.md", "*.txt")
+Set-FileEncodingToUtf8 -BasePath $PSScriptRoot -Extensions @("*.ps1", "*.psm1", "*.json", "*.md", "*.txt")
 Write-Host # Add a newline for spacing
 
 # SECCIÓN 3.5: VERIFICACIÓN INICIAL DE INTERNET
 if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
-    Write-Styled -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."
+    Write-PhoenixStyledOutput -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."
     Read-Host "Presione Enter para salir."
     exit
 }
@@ -83,43 +83,43 @@ if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
 # SECCIÓN 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
 $global:RebootIsPending = $false
 Clear-Host
-Show-Header -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear
-Write-Styled -Type Info -Message "Este script automatiza la configuración y aprovisionamiento de un entorno de desarrollo en Windows."
-Write-Styled -Type Info -Message "Realizará cambios significativos en el sistema, como instalar/desinstalar software y aplicar optimizaciones."
+Show-PhoenixHeader -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear
+Write-PhoenixStyledOutput -Type Info -Message "Este script automatiza la configuración y aprovisionamiento de un entorno de desarrollo en Windows."
+Write-PhoenixStyledOutput -Type Info -Message "Realizará cambios significativos en el sistema, como instalar/desinstalar software y aplicar optimizaciones."
 Write-Host
-Write-Styled -Type Warn -Message "ADVERTENCIA: Ejecute este script bajo su propio riesgo. Asegúrese de entender lo que hace cada fase."
+Write-PhoenixStyledOutput -Type Warn -Message "ADVERTENCIA: Ejecute este script bajo su propio riesgo. Asegúrese de entender lo que hace cada fase."
 Write-Host
 
-$consent = (Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage "¿Acepta los riesgos y desea continuar? (S/N)")[0]
+$consent = (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "¿Acepta los riesgos y desea continuar? (S/N)")[0]
 if ($consent -ne 'S') {
-    Write-Styled -Type Error -Message "Consentimiento no otorgado. El script se cerrará."
+    Write-PhoenixStyledOutput -Type Error -Message "Consentimiento no otorgado. El script se cerrará."
     Start-Sleep -Seconds 2
     exit
 }
 
 # SECCIÓN 5: BUCLE DE CONTROL PRINCIPAL
 $mainMenuOptions = @(
-    @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-Phase1_OneDrive; Pause-And-Return } },
-    @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-Phase2_SoftwareMenu -CatalogPath $catalogsPath } },
-    @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-Phase3_Tweaks -CatalogPath $tweaksCatalog; Pause-And-Return } },
-    @{ Description = "Ejecutar FASE 4: Instalación de WSL2"; Action = { Invoke-Phase4_WSL } },
-    @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-Phase5_Cleanup -CatalogPath $cleanupCatalog } },
-    @{ Description = "Ejecutar FASE 6: Saneamiento y Calidad del Código"; Action = { Invoke-Phase6_CodeQuality } },
-    @{ Description = "Ejecutar FASE 7: Generar Informe de Auditoría"; Action = { Invoke-Phase7_Audit } }
+    @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-OneDrivePhase; Request-Continuation } },
+    @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-SoftwareMenuPhase -CatalogPath $catalogsPath } },
+    @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-TweaksPhase -CatalogPath $tweaksCatalog; Request-Continuation } },
+    @{ Description = "Ejecutar FASE 4: Instalación de WSL2"; Action = { Invoke-WslPhase } },
+    @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-CleanupPhase -CatalogPath $cleanupCatalog } },
+    @{ Description = "Ejecutar FASE 6: Saneamiento y Calidad del Código"; Action = { Invoke-CodeQualityPhase } },
+    @{ Description = "Ejecutar FASE 7: Generar Informe de Auditoría"; Action = { Invoke-AuditPhase } }
 )
 
 function Show-MainMenu {
     param([array]$menuOptions, [switch]$NoClear)
-    Show-Header -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear:$NoClear
-    Write-Styled -Type Info -Message "Toda la salida se registrará en: $logFile`n"
+    Show-PhoenixHeader -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear:$NoClear
+    Write-PhoenixStyledOutput -Type Info -Message "Toda la salida se registrará en: $logFile`n"
 
     for ($i = 0; $i -lt $menuOptions.Count; $i++) {
         $option = $menuOptions[$i]
-        Write-Styled -Type Step -Message "[$($i+1)] $($option.Description)"
+        Write-PhoenixStyledOutput -Type Step -Message "[$($i+1)] $($option.Description)"
     }
 
-    Write-Styled -Type Step -Message "[R] Refrescar Menú"
-    Write-Styled -Type Step -Message "[Q] Salir"
+    Write-PhoenixStyledOutput -Type Step -Message "[R] Refrescar Menú"
+    Write-PhoenixStyledOutput -Type Step -Message "[Q] Salir"
     Write-Host
 }
 
@@ -132,7 +132,7 @@ try {
 
         $numericChoices = 1..$mainMenuOptions.Count
         $validChoices = @($numericChoices) + @('R', 'Q')
-        $choices = Invoke-MenuPrompt -ValidChoices $validChoices
+        $choices = Request-MenuSelection -ValidChoices $validChoices
 
         if ($choices -contains 'Q') { $exitMainMenu = $true; continue }
         if ($choices -contains 'R') { Clear-Host; continue }
@@ -146,7 +146,7 @@ try {
                 $chosenOption = $mainMenuOptions[$chosenIndex]
                 & $chosenOption.Action
                 if ($global:RebootIsPending) {
-                    Invoke-RestartPrompt
+                    Confirm-SystemRestart
                     $global:RebootIsPending = $false
                 }
             }
@@ -155,11 +155,11 @@ try {
 } catch [System.Management.Automation.PipelineStoppedException] {
     # Silenciar el error de Ctrl+C, ya que el bloque finally lo manejará.
 } catch {
-    Write-Styled -Type Error -Message "El script ha encontrado un error fatal inesperado y no puede continuar."
-    Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
+    Write-PhoenixStyledOutput -Type Error -Message "El script ha encontrado un error fatal inesperado y no puede continuar."
+    Write-PhoenixStyledOutput -Type Log -Message "Error: $($_.Exception.Message)"
     Read-Host "Presione Enter para salir."
 } finally {
-    Show-Header -Title "PROCESO FINALIZADO" -NoClear
-    Write-Styled -Type Info -Message "`nEl log completo de la sesión se ha guardado en: $logFile"; Write-Host
+    Show-PhoenixHeader -Title "PROCESO FINALIZADO" -NoClear
+    Write-PhoenixStyledOutput -Type Info -Message "`nEl log completo de la sesión se ha guardado en: $logFile"; Write-Host
     Stop-Transcript
 }

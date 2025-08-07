@@ -13,48 +13,48 @@
 #region Cleanup Task Helpers
 function _Invoke-CleanupTask-SimpleCommand {
     param($Task)
-    Write-Styled -Type SubStep -Message "Ejecutando: $($Task.description)..."
-    $result = Invoke-JobWithTimeout -ScriptBlock ([scriptblock]::Create($Task.details.command)) -Activity $Task.description -TimeoutSeconds 1800
+    Write-PhoenixStyledOutput -Type SubStep -Message "Ejecutando: $($Task.description)..."
+    $result = Start-JobWithTimeout -ScriptBlock ([scriptblock]::Create($Task.details.command)) -Activity $Task.description -TimeoutSeconds 1800
     if ($result.Success) {
-        Write-Styled -Type Success -Message "Tarea '$($Task.description)' completada."
+        Write-PhoenixStyledOutput -Type Success -Message "Tarea '$($Task.description)' completada."
         if ($Task.rebootRequired) { $global:RebootIsPending = $true }
     } else {
-        Write-Styled -Type Error -Message "La tarea '$($Task.description)' falló: $($result.Error)"
+        Write-PhoenixStyledOutput -Type Error -Message "La tarea '$($Task.description)' falló: $($result.Error)"
     }
 }
 
 function _Invoke-CleanupTask-DiskCleanup {
     param($Task)
-    Write-Styled -Type SubStep -Message "Analizando discos..."
+    Write-PhoenixStyledOutput -Type SubStep -Message "Analizando discos..."
     $drives = Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.DriveType -eq 3 -and $_.DriveLetter }
     foreach ($drive in $drives) {
         try {
             Optimize-Volume -DriveLetter $drive.DriveLetter.Trim(":") -Verbose
         } catch {
-            Write-Styled -Type Error -Message "No se pudo optimizar la unidad $($drive.DriveLetter): $($_.Exception.Message)"
+            Write-PhoenixStyledOutput -Type Error -Message "No se pudo optimizar la unidad $($drive.DriveLetter): $($_.Exception.Message)"
         }
     }
-    Write-Styled -Type Success -Message "Optimización de discos completada."
+    Write-PhoenixStyledOutput -Type Success -Message "Optimización de discos completada."
 }
 
 function _Invoke-CleanupTask-FindLargeFiles {
     param($Task)
-    Write-Styled -Type SubStep -Message "Buscando archivos grandes... Esto puede tardar MUCHO tiempo."
+    Write-PhoenixStyledOutput -Type SubStep -Message "Buscando archivos grandes... Esto puede tardar MUCHO tiempo."
     $files = Get-ChildItem -Path $Task.details.drive -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt ($Task.details.minSizeMB * 1MB) } | Sort-Object -Property Length -Descending | Select-Object -First $Task.details.count
 
-    if ($files.Count -eq 0) { Write-Styled -Type Warn -Message "No se encontraron archivos que cumplan el criterio."; return }
+    if ($files.Count -eq 0) { Write-PhoenixStyledOutput -Type Warn -Message "No se encontraron archivos que cumplan el criterio."; return }
 
     for ($i = 0; $i -lt $files.Count; $i++) {
         Write-Host ("[{0,2}] {1,-10} {2}" -f ($i + 1), ("{0:N2} GB" -f ($files[$i].Length / 1GB)), $files[$i].FullName)
     }
-    Write-Styled -Type Consent -Message "`n¿Desea eliminar alguno de estos archivos? (Escriba los números separados por comas, o 0 para no borrar nada)"
+    Write-PhoenixStyledOutput -Type Consent -Message "`n¿Desea eliminar alguno de estos archivos? (Escriba los números separados por comas, o 0 para no borrar nada)"
     $choice = Read-Host
     if ($choice -eq '0') { return }
 
     $indicesToDelete = $choice -split ',' | ForEach-Object { [int]$_ - 1 }
     foreach ($index in $indicesToDelete) {
         if ($index -ge 0 -and $index -lt $files.Count) {
-            Write-Styled -Type Info -Message "Eliminando $($files[$index].FullName)..."
+            Write-PhoenixStyledOutput -Type Info -Message "Eliminando $($files[$index].FullName)..."
             Remove-Item -Path $files[$index].FullName -Force
         }
     }
@@ -62,74 +62,74 @@ function _Invoke-CleanupTask-FindLargeFiles {
 
 function _Invoke-CleanupTask-AnalyzeProcesses {
     param($Task)
-    Write-Styled -Type Info -Message "Analizando procesos del sistema..."
+    Write-PhoenixStyledOutput -Type Info -Message "Analizando procesos del sistema..."
     $processList = Get-Process -ErrorAction SilentlyContinue | Select-Object Name, Id, @{Name="Memory"; Expression={$_.WorkingSet}}, @{Name="CPUTime"; Expression={$_.TotalProcessorTime.TotalSeconds}}
 
     $cpuFormat = @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}
     $memFormat = @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}}
 
-    Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de CPU:"
+    Write-PhoenixStyledOutput -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de CPU:"
     $processList | Sort-Object -Property CPUTime -Descending | Select-Object -First $Task.details.count | Format-Table Name, Id, $cpuFormat, $memFormat -AutoSize
 
-    Write-Styled -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de Memoria (MB):"
+    Write-PhoenixStyledOutput -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de Memoria (MB):"
     $processList | Sort-Object -Property Memory -Descending | Select-Object -First $Task.details.count | Format-Table Name, Id, $cpuFormat, $memFormat -AutoSize
 }
 
 function _Invoke-CleanupTask-SetDNS {
     param($Task)
-    Write-Styled -Type Info -Message "Los servidores DNS públicos pueden ofrecer mayor velocidad y privacidad."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?")[0] -ne 'S') {
-        Write-Styled -Type Warn -Message "Operación cancelada."
+    Write-PhoenixStyledOutput -Type Info -Message "Los servidores DNS públicos pueden ofrecer mayor velocidad y privacidad."
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?")[0] -ne 'S') {
+        Write-PhoenixStyledOutput -Type Warn -Message "Operación cancelada."
         return
     }
 
     try {
-        Write-Styled -Type SubStep -Message "Cambiando DNS a: $($Task.details.name)..."
+        Write-PhoenixStyledOutput -Type SubStep -Message "Cambiando DNS a: $($Task.details.name)..."
         $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
         if ($null -eq $adapters) { throw "No se encontraron adaptadores de red activos." }
         $adapters | Set-DnsClientServerAddress -ServerAddresses ($Task.details.servers) -ErrorAction Stop
-        Write-Styled -Type Success -Message "DNS cambiado correctamente."
+        Write-PhoenixStyledOutput -Type Success -Message "DNS cambiado correctamente."
     } catch {
-        Write-Styled -Type Error -Message "No se pudo cambiar el DNS: $($_.Exception.Message)"
+        Write-PhoenixStyledOutput -Type Error -Message "No se pudo cambiar el DNS: $($_.Exception.Message)"
     }
 }
 
 function _Invoke-CleanupTask-RecycleBinCleanup {
     param($Task)
-    Write-Styled -Type SubStep -Message $Task.description
+    Write-PhoenixStyledOutput -Type SubStep -Message $Task.description
     try {
         $shell = New-Object -ComObject Shell.Application
         $recycleBin = $shell.NameSpace(0xA)
         if ($recycleBin.Items().Count -eq 0) {
-            Write-Styled -Type Success -Message "La Papelera de Reciclaje ya está vacía."
+            Write-PhoenixStyledOutput -Type Success -Message "La Papelera de Reciclaje ya está vacía."
         } else {
-            if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea vaciar la papelera permanentemente?")[0] -eq 'S') {
+            if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea vaciar la papelera permanentemente?")[0] -eq 'S') {
                 Clear-RecycleBin -Force -ErrorAction Stop
-                Write-Styled -Type Success -Message "Papelera de Reciclaje vaciada."
+                Write-PhoenixStyledOutput -Type Success -Message "Papelera de Reciclaje vaciada."
             }
         }
     } catch {
-        Write-Styled -Type Error -Message "No se pudo procesar la Papelera de Reciclaje: $($_.Exception.Message)"
+        Write-PhoenixStyledOutput -Type Error -Message "No se pudo procesar la Papelera de Reciclaje: $($_.Exception.Message)"
     }
 }
 
 function _Invoke-CleanupTask-WindowsUpdateCleanup {
     param($Task)
-    Write-Styled -Type SubStep -Message $Task.description
-    Write-Styled -Type Warn -Message "Esta operación puede tardar mucho tiempo."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea proceder con la limpieza profunda?")[0] -eq 'S') {
-        $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /English /Cleanup-Image /StartComponentCleanup /ResetBase" -FailureStrings "Error:" -Activity "Limpiando archivos de Windows Update"
+    Write-PhoenixStyledOutput -Type SubStep -Message $Task.description
+    Write-PhoenixStyledOutput -Type Warn -Message "Esta operación puede tardar mucho tiempo."
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea proceder con la limpieza profunda?")[0] -eq 'S') {
+        $result = Invoke-NativeCommandWithOutputCapture -Executable "Dism.exe" -ArgumentList "/Online /English /Cleanup-Image /StartComponentCleanup /ResetBase" -FailureStrings "Error:" -Activity "Limpiando archivos de Windows Update"
         if ($result.Success) {
-            Write-Styled -Type Success -Message "Tarea '$($Task.description)' completada."
+            Write-PhoenixStyledOutput -Type Success -Message "Tarea '$($Task.description)' completada."
             if ($Task.rebootRequired) { $global:RebootIsPending = $true }
         } else {
-            Write-Styled -Type Error -Message "La tarea '$($Task.description)' falló."
+            Write-PhoenixStyledOutput -Type Error -Message "La tarea '$($Task.description)' falló."
         }
     }
 }
 #endregion
 
-function Invoke-Phase5_Cleanup {
+function Invoke-CleanupPhase {
     param([string]$CatalogPath)
 
     try {
@@ -139,13 +139,13 @@ function Invoke-Phase5_Cleanup {
         $catalogContent = Get-Content -Raw -Path $CatalogPath -Encoding UTF8
         $catalogJson = $catalogContent | ConvertFrom-Json
 
-        if (-not (Test-JsonIsValid -Path $CatalogPath)) {
+        if (-not (Test-JsonFile -Path $CatalogPath)) {
             throw "El fichero de catálogo '$((Split-Path $CatalogPath -Leaf))' contiene JSON inválido."
         }
         $tasks = $catalogJson.items
     } catch {
-        Write-Styled -Type Error -Message "Fallo CRÍTICO al leer o procesar el catálogo de limpieza: $($_.Exception.Message)"
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Error -Message "Fallo CRÍTICO al leer o procesar el catálogo de limpieza: $($_.Exception.Message)"
+        Request-Continuation
         return
     }
 
@@ -153,7 +153,7 @@ function Invoke-Phase5_Cleanup {
     while (-not $exitMenu) {
         $menuItems = $tasks | ForEach-Object { [PSCustomObject]@{ Description = $_.description } }
         $actionOptions = [ordered]@{ '0' = 'Volver al Menú Principal.' }
-        $choices = Invoke-StandardMenu -Title "FASE 5: Limpieza y Optimización del Sistema" -MenuItems $menuItems -ActionOptions $actionOptions
+        $choices = Show-PhoenixStandardMenu -Title "FASE 5: Limpieza y Optimización del Sistema" -MenuItems $menuItems -ActionOptions $actionOptions
 
         if ($choices -contains '0') { $exitMenu = $true; continue }
 
@@ -168,12 +168,12 @@ function Invoke-Phase5_Cleanup {
                 & $functionName -Task $selectedTask
                 $actionTaken = $true
             } else {
-                Write-Styled -Type Error -Message "Tipo de tarea desconocido: '$($selectedTask.type)'"
+                Write-PhoenixStyledOutput -Type Error -Message "Tipo de tarea desconocido: '$($selectedTask.type)'"
                 $actionTaken = $true # Pausar incluso si hay error.
             }
         }
 
-        if ($actionTaken) { Pause-And-Return }
+        if ($actionTaken) { Request-Continuation }
     }
 }
 

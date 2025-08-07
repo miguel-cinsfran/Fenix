@@ -9,7 +9,7 @@
     Autor: miguel-cinsfran
 #>
 
-function _Get-AppliedTweaks {
+function Get-AppliedSystemTweak {
     $tweaksCatalogPath = Join-Path $PSScriptRoot "..\\assets\\catalogs\\system_tweaks.json"
     if (-not (Test-Path $tweaksCatalogPath)) { return @() }
 
@@ -60,12 +60,12 @@ function _Get-AppliedTweaks {
     return $appliedTweaks
 }
 
-function Invoke-Phase7_Audit {
+function Invoke-AuditPhase {
     [CmdletBinding()]
     param()
 
-    Show-Header -Title "FASE 7: Auditoría y Exportación"
-    Write-Styled -Type Info -Message "Esta fase generará un informe del estado actual del sistema."
+    Show-PhoenixHeader -Title "FASE 7: Auditoría y Exportación"
+    Write-PhoenixStyledOutput -Type Info -Message "Esta fase generará un informe del estado actual del sistema."
 
     try {
         $report = [System.Text.StringBuilder]::new()
@@ -81,7 +81,7 @@ function Invoke-Phase7_Audit {
         $report.AppendLine("## Software Instalado")
 
         # Chocolatey
-        Write-Styled -Type SubStep -Message "Recolectando paquetes de Chocolatey..."
+        Write-PhoenixStyledOutput -Type SubStep -Message "Recolectando paquetes de Chocolatey..."
         $chocoPackages = & choco list --limit-output --local-only 2>$null | ForEach-Object { $parts = $_ -split '\|'; if ($parts.Length -eq 2) { [PSCustomObject]@{ Name = $parts[0]; Version = $parts[1] } } }
         $report.AppendLine("### Chocolatey")
         if ($chocoPackages) {
@@ -94,7 +94,7 @@ function Invoke-Phase7_Audit {
         $report.AppendLine()
 
         # Winget
-        Write-Styled -Type SubStep -Message "Recolectando paquetes de Winget..."
+        Write-PhoenixStyledOutput -Type SubStep -Message "Recolectando paquetes de Winget..."
         $wingetOutput = & winget list 2>$null
         # Simple parsing, as winget's format is tricky. This is good enough for an audit.
         $wingetPackages = $wingetOutput | Select-Object -Skip 2 | ForEach-Object {
@@ -115,8 +115,8 @@ function Invoke-Phase7_Audit {
         $report.AppendLine()
 
         # --- Recolección de Ajustes Aplicados (Tweaks) ---
-        Write-Styled -Type SubStep -Message "Recolectando ajustes del sistema aplicados..."
-        $appliedTweaks = _Get-AppliedTweaks
+        Write-PhoenixStyledOutput -Type SubStep -Message "Recolectando ajustes del sistema aplicados..."
+        $appliedTweaks = Get-AppliedSystemTweak
         $report.AppendLine("## Ajustes del Sistema Aplicados")
         if ($appliedTweaks.Count -gt 0) {
             $report.AppendLine("| Descripción del Ajuste |")
@@ -129,13 +129,13 @@ function Invoke-Phase7_Audit {
 
         # --- Guardar el Informe ---
         Out-File -FilePath $reportPath -InputObject $report.ToString() -Encoding utf8
-        Write-Styled -Type Success -Message "Informe de auditoría guardado en: $reportPath"
+        Write-PhoenixStyledOutput -Type Success -Message "Informe de auditoría guardado en: $reportPath"
 
     } catch {
-        Write-Styled -Type Error -Message "Ocurrió un error al generar el informe de auditoría: $($_.Exception.Message)"
+        Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error al generar el informe de auditoría: $($_.Exception.Message)"
     }
 
-    Pause-And-Return
+    Request-Continuation
 }
 
 Export-ModuleMember -Function *

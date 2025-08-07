@@ -13,13 +13,13 @@
 
 #region Package Action Helpers
 
-function Invalidate-PackageCache {
+function Clear-PackageStatusCache {
     param(
         [Parameter(Mandatory = $true)]
         [ValidateSet('Chocolatey', 'Winget')]
         [string]$Manager
     )
-    Write-Styled -Type SubStep -Message "Invalidando caché para ${Manager}."
+    Write-PhoenixStyledOutput -Type SubStep -Message "Invalidando caché para ${Manager}."
     if ($Manager -eq 'Chocolatey') {
         $script:chocolateyStatusCache = $null
     } else { # Winget
@@ -27,14 +27,14 @@ function Invalidate-PackageCache {
     }
 }
 
-function _Invoke-ProcessPendingPackages {
+function Start-PendingPackageProcessing {
     param(
         [string]$Manager,
         [array]$PackageStatusList
     )
     $packagesToProcess = $PackageStatusList | Where-Object { $_.Status -eq 'No Instalado' -or $_.IsUpgradable }
     if ($packagesToProcess.Count -gt 0) {
-        Write-Styled -Type Info -Message "Procesando $($packagesToProcess.Count) paquetes para ${Manager}..."
+        Write-PhoenixStyledOutput -Type Info -Message "Procesando $($packagesToProcess.Count) paquetes para ${Manager}..."
         try {
             foreach ($item in $packagesToProcess) {
                 if ($item.IsUpgradable) {
@@ -45,13 +45,13 @@ function _Invoke-ProcessPendingPackages {
                     else { Install-WingetPackage -Item $item }
                 }
             }
-            Invalidate-PackageCache -Manager $Manager
+            Clear-PackageStatusCache -Manager $Manager
         } catch {
-            Write-Styled -Type Error -Message "Ocurrió un error durante el procesamiento masivo para ${Manager}."
-            Pause-And-Return
+            Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error durante el procesamiento masivo para ${Manager}."
+            Request-Continuation
         }
     } else {
-        Write-Styled -Type Info -Message "No hay paquetes para instalar o actualizar para ${Manager}."
+        Write-PhoenixStyledOutput -Type Info -Message "No hay paquetes para instalar o actualizar para ${Manager}."
         Start-Sleep -Seconds 2
     }
 }
@@ -60,7 +60,7 @@ function _Invoke-ProcessPendingPackages {
 
 #region Menus
 
-function _Get-PackageMenuActions {
+function Get-PackageMenuAction {
     param(
         [Parameter(Mandatory = $true)]
         $Item
@@ -79,26 +79,26 @@ function _Get-PackageMenuActions {
     return $actions
 }
 
-function _Invoke-SinglePackageMenu {
+function Show-SinglePackageMenu {
     param(
         [string]$Manager,
         [psobject]$Item
     )
     $exitMenu = $false
     while (-not $exitMenu) {
-        Show-Header -Title "Gestionando: $($Item.DisplayName)" -NoClear
-        Write-Styled -Type Info -Message "Estado: $($Item.Status) $($Item.VersionInfo)"
+        Show-PhoenixHeader -Title "Gestionando: $($Item.DisplayName)" -NoClear
+        Write-PhoenixStyledOutput -Type Info -Message "Estado: $($Item.Status) $($Item.VersionInfo)"
 
-        $menuActions = _Get-PackageMenuActions -Item $Item
+        $menuActions = Get-PackageMenuAction -Item $Item
         $menuOptions = [ordered]@{}
         $menuActions | ForEach-Object { $menuOptions[$_.Action] = $_.Label }
 
-        Write-Styled -Type Title -Message "Acciones Disponibles:"
+        Write-PhoenixStyledOutput -Type Title -Message "Acciones Disponibles:"
         foreach ($key in $menuOptions.Keys) {
-            Write-Styled -Type Consent -Message "[$key] $($menuOptions[$key])"
+            Write-PhoenixStyledOutput -Type Consent -Message "[$key] $($menuOptions[$key])"
         }
 
-        $promptChoices = Invoke-MenuPrompt -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" })
+        $promptChoices = Request-MenuSelection -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" })
         if ($promptChoices.Count -eq 0) { continue }
         $choice = $promptChoices[0]
 
@@ -107,29 +107,29 @@ function _Invoke-SinglePackageMenu {
                 'I' {
                     if ($Manager -eq 'Chocolatey') { Install-ChocoPackage -Item $Item }
                     else { Install-WingetPackage -Item $Item }
-                    Invalidate-PackageCache -Manager $Manager
+                    Clear-PackageStatusCache -Manager $Manager
                     $exitMenu = $true
                 }
                 'A' {
                     if ($Manager -eq 'Chocolatey') { Update-ChocoPackage -Item $Item }
                     else { Update-WingetPackage -Item $Item }
-                    Invalidate-PackageCache -Manager $Manager
+                    Clear-PackageStatusCache -Manager $Manager
                     $exitMenu = $true
                 }
                 'D' {
-                    $confirmChoice = (Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea desinstalar $($Item.DisplayName)?")
+                    $confirmChoice = (Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea desinstalar $($Item.DisplayName)?")
                     if ($confirmChoice[0] -eq 'S') {
                         if ($Manager -eq 'Chocolatey') { Uninstall-ChocoPackage -Item $Item }
                         else { Uninstall-WingetPackage -Item $Item }
-                        Invalidate-PackageCache -Manager $Manager
+                        Clear-PackageStatusCache -Manager $Manager
                     }
                     $exitMenu = $true
                 }
                 '0' { $exitMenu = $true }
             }
         } catch {
-            Write-Styled -Type Error -Message "La operación del paquete falló: $($_.Exception.Message)"
-            Pause-And-Return
+            Write-PhoenixStyledOutput -Type Error -Message "La operación del paquete falló: $($_.Exception.Message)"
+            Request-Continuation
         }
     }
 }
@@ -138,7 +138,7 @@ function _Invoke-SinglePackageMenu {
 $script:chocolateyStatusCache = $null
 $script:wingetStatusCache = $null
 
-function Invoke-SoftwareManagerUI {
+function Show-SoftwareManagerUI {
     param(
         [string]$Manager,
         [string]$CatalogFile
@@ -149,19 +149,19 @@ function Invoke-SoftwareManagerUI {
         $catalogJson = $catalogContent | ConvertFrom-Json
 
         # Validar que el JSON es sintácticamente correcto.
-        if (-not (Test-JsonIsValid -Path $CatalogFile)) {
-            Write-Styled -Type Error -Message "El fichero de catálogo '$CatalogFile' contiene JSON inválido."
-            Pause-And-Return; return
+        if (-not (Test-JsonFile -Path $CatalogFile)) {
+            Write-PhoenixStyledOutput -Type Error -Message "El fichero de catálogo '$CatalogFile' contiene JSON inválido."
+            Request-Continuation; return
         }
 
         # La validación de la estructura del catálogo es crucial.
-        if (-not (Test-SoftwareCatalog -CatalogData $catalogJson -CatalogFileName (Split-Path $CatalogFile -Leaf))) {
-            Pause-And-Return; return
+        if (-not (Test-SoftwareCatalogIntegrity -CatalogData $catalogJson -CatalogFileName (Split-Path $CatalogFile -Leaf))) {
+            Request-Continuation; return
         }
         $catalogPackages = $catalogJson.items
     } catch {
-        Write-Styled -Type Error -Message "Fallo CRÍTICO al leer o procesar '${CatalogFile}': $($_.Exception.Message)"
-        Pause-And-Return; return
+        Write-PhoenixStyledOutput -Type Error -Message "Fallo CRÍTICO al leer o procesar '${CatalogFile}': $($_.Exception.Message)"
+        Request-Continuation; return
     }
 
     $cacheVariableName = "script:${Manager}StatusCache"
@@ -170,7 +170,7 @@ function Invoke-SoftwareManagerUI {
     while (-not $exitManagerUI) {
         $packageStatusList = Get-Variable -Name $cacheVariableName -ErrorAction SilentlyContinue -ValueOnly
         if ($null -eq $packageStatusList) {
-            Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para ${Manager} (puede tardar)..."
+            Write-PhoenixStyledOutput -Type Info -Message "Obteniendo estado de los paquetes para ${Manager} (puede tardar)..."
             if ($Manager -eq 'Chocolatey') {
                 $packageStatusList = Get-ChocoPackageStatus -CatalogPackages $catalogPackages
             }
@@ -181,8 +181,8 @@ function Invoke-SoftwareManagerUI {
         }
 
         if ($null -eq $packageStatusList) {
-            Write-Styled -Type Error -Message "No se pudo continuar debido a un error al obtener el estado de los paquetes."
-            Pause-And-Return; return
+            Write-PhoenixStyledOutput -Type Error -Message "No se pudo continuar debido a un error al obtener el estado de los paquetes."
+            Request-Continuation; return
         }
 
         $menuItems = $packageStatusList | ForEach-Object {
@@ -198,26 +198,26 @@ function Invoke-SoftwareManagerUI {
              '0' = 'Volver al menú anterior.'
         }
         $title = "FASE 2: Administrador de Paquetes (${Manager})"
-        $choices = Invoke-StandardMenu -Title $title -MenuItems $menuItems -ActionOptions $actionOptions
+        $choices = Show-PhoenixStandardMenu -Title $title -MenuItems $menuItems -ActionOptions $actionOptions
 
         if ($choices.Count -eq 0) { continue }
 
         # Procesar primero las acciones de una sola letra, ya que son mutuamente excluyentes
         if ($choices -contains '0') { $exitManagerUI = $true; continue }
-        if ($choices -contains 'R') { Invalidate-PackageCache -Manager $Manager; continue }
+        if ($choices -contains 'R') { Clear-PackageStatusCache -Manager $Manager; continue }
         if ($choices -contains 'A') {
-            _Invoke-ProcessPendingPackages -Manager $Manager -PackageStatusList $packageStatusList
+            Start-PendingPackageProcessing -Manager $Manager -PackageStatusList $packageStatusList
             continue
         }
         if ($choices -contains 'U') {
             $upgradableItems = $packageStatusList | Where-Object { $_.IsUpgradable }
-            Show-Header -Title "Paquetes con Actualizaciones Disponibles (${Manager})"
+            Show-PhoenixHeader -Title "Paquetes con Actualizaciones Disponibles (${Manager})"
             if ($upgradableItems.Count -gt 0) {
-                $upgradableItems | ForEach-Object { Write-Styled -Type Warn -Message "$($_.DisplayName) $($_.VersionInfo)" }
+                $upgradableItems | ForEach-Object { Write-PhoenixStyledOutput -Type Warn -Message "$($_.DisplayName) $($_.VersionInfo)" }
             } else {
-                Write-Styled -Type Info -Message "Todos los paquetes del catálogo están actualizados."
+                Write-PhoenixStyledOutput -Type Info -Message "Todos los paquetes del catálogo están actualizados."
             }
-            Pause-And-Return
+            Request-Continuation
             continue
         }
 
@@ -227,28 +227,28 @@ function Invoke-SoftwareManagerUI {
             $packageIndex = $choice - 1
             if ($packageIndex -ge 0 -and $packageIndex -lt $packageStatusList.Count) {
                 $selectedItem = $packageStatusList[$packageIndex]
-                _Invoke-SinglePackageMenu -Manager $Manager -Item $selectedItem
+                Show-SinglePackageMenu -Manager $Manager -Item $selectedItem
             }
         }
     }
 }
 
-function Invoke-Phase2_PreFlightChecks {
-    Show-Header -Title "FASE 2: Verificación de Dependencias"
+function Test-Phase2Prerequisites {
+    Show-PhoenixHeader -Title "FASE 2: Verificación de Dependencias"
 
     $allChecksPassed = $true
 
-    Write-Styled -Message "Verificando existencia de Chocolatey..." -NoNewline
+    Write-PhoenixStyledOutput -Message "Verificando existencia de Chocolatey..." -NoNewline
     if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
         Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
-        Write-Styled -Type Consent -Message "El gestor de paquetes Chocolatey no está instalado y es requerido para esta fase."
-        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?") -eq 'S') {
-            Write-Styled -Type Info -Message "Instalando Chocolatey... Esto puede tardar unos minutos."
+        Write-PhoenixStyledOutput -Type Consent -Message "El gestor de paquetes Chocolatey no está instalado y es requerido para esta fase."
+        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?") -eq 'S') {
+            Write-PhoenixStyledOutput -Type Info -Message "Instalando Chocolatey... Esto puede tardar unos minutos."
             try {
                 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-                Write-Styled -Type Success -Message "Chocolatey se ha instalado correctamente."
+                Write-PhoenixStyledOutput -Type Success -Message "Chocolatey se ha instalado correctamente."
             } catch {
-                Write-Styled -Type Error -Message "La instalación automática de Chocolatey falló."
+                Write-PhoenixStyledOutput -Type Error -Message "La instalación automática de Chocolatey falló."
                 $allChecksPassed = $false
             }
         } else {
@@ -258,33 +258,33 @@ function Invoke-Phase2_PreFlightChecks {
         Write-Host " [Ã‰XITO]" -F $Global:Theme.Success
     }
 
-    Write-Styled -Message "Verificando existencia de Winget..." -NoNewline
+    Write-PhoenixStyledOutput -Message "Verificando existencia de Winget..." -NoNewline
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Error
-        Write-Styled -Type Error -Message "El gestor de paquetes Winget no fue encontrado. Por favor, actualice su 'App Installer' desde la Microsoft Store."
+        Write-PhoenixStyledOutput -Type Error -Message "El gestor de paquetes Winget no fue encontrado. Por favor, actualice su 'App Installer' desde la Microsoft Store."
         $allChecksPassed = $false
     } else {
         Write-Host " [Ã‰XITO]" -F $Global:Theme.Success
-        Write-Styled -Type SubStep -Message "Actualizando repositorios de Winget..."
-        Invoke-NativeCommand -Executable "winget" -ArgumentList "source update" -Activity "Actualizando repositorios de Winget" | Out-Null
+        Write-PhoenixStyledOutput -Type SubStep -Message "Actualizando repositorios de Winget..."
+        Invoke-NativeCommandWithOutputCapture -Executable "winget" -ArgumentList "source update" -Activity "Actualizando repositorios de Winget" | Out-Null
     }
 
-    Write-Styled -Message "Verificando módulo de PowerShell para Winget..." -NoNewline
+    Write-PhoenixStyledOutput -Message "Verificando módulo de PowerShell para Winget..." -NoNewline
     if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
         Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
-        Write-Styled -Type Consent -Message "El módulo de PowerShell para Winget es recomendado para una operación robusta."
-        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?") -eq 'S') {
-            Write-Styled -Type Info -Message "Instalando módulo 'Microsoft.WinGet.Client'..."
+        Write-PhoenixStyledOutput -Type Consent -Message "El módulo de PowerShell para Winget es recomendado para una operación robusta."
+        if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?") -eq 'S') {
+            Write-PhoenixStyledOutput -Type Info -Message "Instalando módulo 'Microsoft.WinGet.Client'..."
             try {
                 Install-Module -Name Microsoft.WinGet.Client -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
-                Write-Styled -Type Success -Message "Módulo instalado correctamente."
+                Write-PhoenixStyledOutput -Type Success -Message "Módulo instalado correctamente."
             } catch {
-                Write-Styled -Type Error -Message "La instalación automática del módulo de Winget falló: $($_.Exception.Message)"
-                Write-Styled -Type Warn -Message "El script continuará usando el método de reserva (CLI)."
+                Write-PhoenixStyledOutput -Type Error -Message "La instalación automática del módulo de Winget falló: $($_.Exception.Message)"
+                Write-PhoenixStyledOutput -Type Warn -Message "El script continuará usando el método de reserva (CLI)."
                 $Global:UseWingetCli = $true
             }
         } else {
-            Write-Styled -Type Warn -Message "Instalación denegada. El script usará el método de reserva para Winget."
+            Write-PhoenixStyledOutput -Type Warn -Message "Instalación denegada. El script usará el método de reserva para Winget."
             $Global:UseWingetCli = $true
         }
     } else {
@@ -292,12 +292,12 @@ function Invoke-Phase2_PreFlightChecks {
     }
 
     if (-not $allChecksPassed) {
-        Pause-And-Return -Message "Una o más dependencias críticas no fueron satisfechas. Volviendo al menú principal."
+        Request-Continuation -Message "Una o más dependencias críticas no fueron satisfechas. Volviendo al menú principal."
     }
     return $allChecksPassed
 }
 
-function Invoke-Phase2_SoftwareMenu {
+function Invoke-SoftwareMenuPhase {
     param([string]$CatalogPath)
 
     # Cargar los módulos de los gestores de paquetes con prefijos para evitar colisiones.
@@ -305,56 +305,56 @@ function Invoke-Phase2_SoftwareMenu {
         Import-Module (Join-Path $PSScriptRoot "package_managers/chocolatey.psm1") -Prefix "Choco" -Force
         Import-Module (Join-Path $PSScriptRoot "package_managers/winget.psm1") -Prefix "Winget" -Force
     } catch {
-        Write-Styled -Type Error -Message "No se pudo cargar un módulo de gestor de paquetes. Esto es un error fatal."
-        Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
-        Write-Styled -Type Log -Message "Detalles: $($_.ToString())"
-        Pause-And-Return; return
+        Write-PhoenixStyledOutput -Type Error -Message "No se pudo cargar un módulo de gestor de paquetes. Esto es un error fatal."
+        Write-PhoenixStyledOutput -Type Log -Message "Error: $($_.Exception.Message)"
+        Write-PhoenixStyledOutput -Type Log -Message "Detalles: $($_.ToString())"
+        Request-Continuation; return
     }
 
     $chocoCatalogFile = Join-Path $CatalogPath "chocolatey_catalog.json"
     $wingetCatalogFile = Join-Path $CatalogPath "winget_catalog.json"
     if (-not (Test-Path $chocoCatalogFile) -or -not (Test-Path $wingetCatalogFile)) {
-        Write-Styled -Type Error -Message "No se encontraron los archivos de catálogo en '${CatalogPath}'."
-        Pause-And-Return; return
+        Write-PhoenixStyledOutput -Type Error -Message "No se encontraron los archivos de catálogo en '${CatalogPath}'."
+        Request-Continuation; return
     }
 
     $exitSubMenu = $false
     while (-not $exitSubMenu) {
-        Show-Header -Title "FASE 2: Instalación de Software"
-        Write-Styled -Type Step -Message "[1] Administrar paquetes de Chocolatey"
-        Write-Styled -Type Step -Message "[2] Administrar paquetes de Winget"
-        Write-Styled -Type Step -Message "[3] Instalar TODOS los paquetes de ambos catálogos"
-        Write-Styled -Type Step -Message "[0] Volver al Menú Principal"
+        Show-PhoenixHeader -Title "FASE 2: Instalación de Software"
+        Write-PhoenixStyledOutput -Type Step -Message "[1] Administrar paquetes de Chocolatey"
+        Write-PhoenixStyledOutput -Type Step -Message "[2] Administrar paquetes de Winget"
+        Write-PhoenixStyledOutput -Type Step -Message "[3] Instalar TODOS los paquetes de ambos catálogos"
+        Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
         Write-Host
 
-        $choices = Invoke-MenuPrompt -ValidChoices @('1', '2', '3', '0')
+        $choices = Request-MenuSelection -ValidChoices @('1', '2', '3', '0')
         if ($choices.Count -eq 0) { continue }
         $choice = $choices[0] # Solo tiene sentido una opción a la vez en este menú.
 
         switch ($choice) {
             '1' {
-                Invoke-SoftwareManagerUI -Manager 'Chocolatey' -CatalogFile $chocoCatalogFile
+                Show-SoftwareManagerUI -Manager 'Chocolatey' -CatalogFile $chocoCatalogFile
             }
             '2' {
-                Invoke-SoftwareManagerUI -Manager 'Winget' -CatalogFile $wingetCatalogFile
+                Show-SoftwareManagerUI -Manager 'Winget' -CatalogFile $wingetCatalogFile
             }
             '3' {
-                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Instalar todos los paquetes de AMBOS catálogos?") -eq 'S') {
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Instalar todos los paquetes de AMBOS catálogos?") -eq 'S') {
                     # Chocolatey
-                    Show-Header -Title "Instalación Masiva: Chocolatey"
+                    Show-PhoenixHeader -Title "Instalación Masiva: Chocolatey"
                     $chocoCatalogPackages = (Get-Content -Raw -Path $chocoCatalogFile -Encoding UTF8 | ConvertFrom-Json).items
                     $chocoStatusList = Get-ChocoPackageStatus -CatalogPackages $chocoCatalogPackages
-                    _Invoke-ProcessPendingPackages -Manager 'Chocolatey' -PackageStatusList $chocoStatusList
+                    Start-PendingPackageProcessing -Manager 'Chocolatey' -PackageStatusList $chocoStatusList
 
                     # Winget
-                    Show-Header -Title "Instalación Masiva: Winget"
+                    Show-PhoenixHeader -Title "Instalación Masiva: Winget"
                     $wingetCatalogPackages = (Get-Content -Raw -Path $wingetCatalogFile -Encoding UTF8 | ConvertFrom-Json).items
                     $wingetStatusList = Get-WingetPackageStatus -CatalogPackages $wingetCatalogPackages
-                    _Invoke-ProcessPendingPackages -Manager 'Winget' -PackageStatusList $wingetStatusList
+                    Start-PendingPackageProcessing -Manager 'Winget' -PackageStatusList $wingetStatusList
 
-                    Invalidate-PackageCache -Manager 'Chocolatey'
-                    Invalidate-PackageCache -Manager 'Winget'
-                    Pause-And-Return
+                    Clear-PackageStatusCache -Manager 'Chocolatey'
+                    Clear-PackageStatusCache -Manager 'Winget'
+                    Request-Continuation
                 }
             }
             '0' { $exitSubMenu = $true }

@@ -20,7 +20,7 @@ class PackageStatus {
 }
 
 # FUNCIONES DE UI
-function Show-Header {
+function Show-PhoenixHeader {
     param(
         [string]$TitleText,
         [switch]$NoClear
@@ -38,7 +38,7 @@ function Show-Header {
     Write-Host
 }
 
-function Write-Styled {
+function Write-PhoenixStyledOutput {
     param([string]$Message, [string]$Type = "Info", [switch]$NoNewline)
     $prefixMap = @{ Step="  -> "; SubStep="     - "; Success=" [ÉXITO] "; Warn=" [OMITIDO] "; Error=" [ERROR] "; Log="       | " }
     $prefix = $prefixMap[$Type]
@@ -50,14 +50,14 @@ function Write-Styled {
     else { Write-Host "$prefix$Message" -ForegroundColor $color }
 }
 
-function Invoke-StandardMenu {
+function Show-PhoenixStandardMenu {
     param(
         [string]$Title,
         [array]$MenuItems,
         $ActionOptions,
         [string]$PromptMessage = "Seleccione una opción"
     )
-    Show-Header -Title $Title
+    Show-PhoenixHeader -Title $Title
 
     # Display menu items (numeric choices)
     for ($i = 0; $i -lt $MenuItems.Count; $i++) {
@@ -86,31 +86,31 @@ function Invoke-StandardMenu {
     # Display action options (letter choices)
     $validChoices = @() + (1..$MenuItems.Count)
     foreach ($key in $ActionOptions.Keys) {
-        Write-Styled -Type Consent -Message "-> [$key] $($ActionOptions[$key])"
+        Write-PhoenixStyledOutput -Type Consent -Message "-> [$key] $($ActionOptions[$key])"
         $validChoices += $key
     }
 
-    return Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage $PromptMessage
+    return Request-MenuSelection -ValidChoices $validChoices -PromptMessage $PromptMessage
 }
 
-function Pause-And-Return {
+function Request-Continuation {
     param([string]$Message = "`nPresione Enter para continuar...")
-    Write-Styled -Type Consent -Message $Message -NoNewline
+    Write-PhoenixStyledOutput -Type Consent -Message $Message -NoNewline
     Read-Host | Out-Null
 }
 
-function Invoke-RestartPrompt {
-    Write-Styled -Type Warn -Message "Se requiere un reinicio para aplicar completamente los cambios."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?")[0] -eq 'S') {
-        Write-Styled -Type Info -Message "Reiniciando el equipo en 5 segundos..."
+function Confirm-SystemRestart {
+    Write-PhoenixStyledOutput -Type Warn -Message "Se requiere un reinicio para aplicar completamente los cambios."
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?")[0] -eq 'S') {
+        Write-PhoenixStyledOutput -Type Info -Message "Reiniciando el equipo en 5 segundos..."
         Start-Sleep -Seconds 5
         Restart-Computer -Force
     } else {
-        Write-Styled -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Por favor, reinicie el equipo lo antes posible."
+        Write-PhoenixStyledOutput -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Por favor, reinicie el equipo lo antes posible."
     }
 }
 
-function Invoke-MenuPrompt {
+function Request-MenuSelection {
     param(
         [string]$PromptMessage = "Seleccione una opción",
         [string[]]$ValidChoices
@@ -147,7 +147,7 @@ function Invoke-MenuPrompt {
             }
 
             if (-not $validInput) {
-                Write-Styled -Type Error -Message "Rango no válido detectado. Use un formato como '5-8'."; Start-Sleep -s 1; Write-Host; continue
+                Write-PhoenixStyledOutput -Type Error -Message "Rango no válido detectado. Use un formato como '5-8'."; Start-Sleep -s 1; Write-Host; continue
             }
 
             # Validar cada elección expandida contra las opciones válidas.
@@ -162,7 +162,7 @@ function Invoke-MenuPrompt {
             }
 
             if ($invalidChoices.Count -gt 0) {
-                Write-Styled -Type Error -Message "Opciones no válidas: $($invalidChoices -join ', ')"; Start-Sleep -s 1; Write-Host
+                Write-PhoenixStyledOutput -Type Error -Message "Opciones no válidas: $($invalidChoices -join ', ')"; Start-Sleep -s 1; Write-Host
             } else {
                 return $finalChoices.ToArray()
             }
@@ -172,7 +172,7 @@ function Invoke-MenuPrompt {
     }
 }
 
-function Invoke-JobWithTimeout {
+function Start-JobWithTimeout {
     param(
         [scriptblock]$ScriptBlock,
         [string]$Activity = "Ejecutando operación en segundo plano...",
@@ -191,7 +191,7 @@ function Invoke-JobWithTimeout {
     $outputBuffer = New-Object System.Text.StringBuilder
     $lastProgressPercent = -1
 
-    Write-Styled -Type Info -Message "Iniciando tarea: $Activity"
+    Write-PhoenixStyledOutput -Type Info -Message "Iniciando tarea: $Activity"
 
     while ($job.State -eq 'Running') {
         # --- Timeouts ---
@@ -253,7 +253,7 @@ function Invoke-JobWithTimeout {
     return $result
 }
 
-function Invoke-ProtectedRegistryAction {
+function Invoke-RegistryActionWithPrivileges {
     param(
         [string]$KeyPath,
         [scriptblock]$Action
@@ -286,14 +286,14 @@ function Invoke-ProtectedRegistryAction {
                 $restoredAcl.SetSecurityDescriptorSddlForm($originalSddl)
                 Set-Acl -Path $KeyPath -AclObject $restoredAcl -ErrorAction Stop
             } catch {
-                Write-Styled -Type Error -Message "FALLO CRÍTICO al restaurar permisos en '$KeyPath'. Se requiere intervención manual."
+                Write-PhoenixStyledOutput -Type Error -Message "FALLO CRÍTICO al restaurar permisos en '$KeyPath'. Se requiere intervención manual."
             }
         }
     }
 }
 
 
-function Invoke-NativeCommand {
+function Invoke-NativeCommandWithOutputCapture {
     param(
         [string]$Executable,
         [string]$ArgumentList,
@@ -306,7 +306,7 @@ function Invoke-NativeCommand {
     # Set console encoding to UTF-8 within the job's scriptblock to ensure correct character decoding from native commands.
     $scriptBlock = [scriptblock]::Create("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & `"$Executable`" $ArgumentList 2>&1; if (`$LASTEXITCODE -ne 0) { throw 'ExitCode: ' + `$LASTEXITCODE }")
 
-    $jobResult = Invoke-JobWithTimeout -ScriptBlock $scriptBlock -Activity $Activity -IdleTimeoutEnabled $IdleTimeoutEnabled -ProgressRegex $ProgressRegex
+    $jobResult = Start-JobWithTimeout -ScriptBlock $scriptBlock -Activity $Activity -IdleTimeoutEnabled $IdleTimeoutEnabled -ProgressRegex $ProgressRegex
 
     $outputString = $jobResult.Output -join "`n"
 
@@ -317,7 +317,7 @@ function Invoke-NativeCommand {
 
     if ($jobResult.Error -match "ExitCode: (\d+)") {
         $result.Success = $false
-        Write-Styled -Type Error -Message "El comando '$Executable' terminó con código de error: $($matches[1])."
+        Write-PhoenixStyledOutput -Type Error -Message "El comando '$Executable' terminó con código de error: $($matches[1])."
     }
 
     # Incluso si el código de salida es 0, buscar cadenas de error en la salida
@@ -325,7 +325,7 @@ function Invoke-NativeCommand {
         foreach ($failureString in $FailureStrings) {
             if ($result.Output -match $failureString) {
                 $result.Success = $false
-                Write-Styled -Type Warn -Message "Se encontró una cadena de error en la salida: '$failureString'"
+                Write-PhoenixStyledOutput -Type Warn -Message "Se encontró una cadena de error en la salida: '$failureString'"
                 break # Un fallo es suficiente
             }
         }
@@ -334,7 +334,7 @@ function Invoke-NativeCommand {
     return $result
 }
 
-function Test-JsonIsValid {
+function Test-JsonFile {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
@@ -348,23 +348,23 @@ function Test-JsonIsValid {
         } catch {
             # This is not a fatal error, the calling function will handle the false return.
             # We log it here for better debuggability.
-            Write-Styled -Type Log -Message "El fichero JSON en '$Path' no es válido. Error: $($_.Exception.Message)"
+            Write-PhoenixStyledOutput -Type Log -Message "El fichero JSON en '$Path' no es válido. Error: $($_.Exception.Message)"
             return $false
         }
     }
 }
 
-function Test-SoftwareCatalog {
+function Test-SoftwareCatalogIntegrity {
     param(
         [psobject]$CatalogData,
         [string]$CatalogFileName
     )
     if (-not $CatalogData.PSObject.Properties.Match('items')) {
-        Write-Styled -Type Error -Message "El fichero de catálogo '$($CatalogFileName)' no contiene la clave raíz 'items'."
+        Write-PhoenixStyledOutput -Type Error -Message "El fichero de catálogo '$($CatalogFileName)' no contiene la clave raíz 'items'."
         return $false
     }
     if ($CatalogData.items -isnot [array]) {
-        Write-Styled -Type Error -Message "La clave 'items' en '$($CatalogFileName)' debe ser un array."
+        Write-PhoenixStyledOutput -Type Error -Message "La clave 'items' en '$($CatalogFileName)' debe ser un array."
         return $false
     }
 
@@ -372,14 +372,14 @@ function Test-SoftwareCatalog {
     for ($i = 0; $i -lt $CatalogData.items.Count; $i++) {
         $item = $CatalogData.items[$i]
         if (-not $item.PSObject.Properties.Match('installId') -or -not $item.installId -or $item.installId -isnot [string]) {
-            Write-Styled -Type Error -Message "El ítem #$($i+1) en '$($CatalogFileName)' no tiene una propiedad 'installId' válida (string, no vacía)."
+            Write-PhoenixStyledOutput -Type Error -Message "El ítem #$($i+1) en '$($CatalogFileName)' no tiene una propiedad 'installId' válida (string, no vacía)."
             $isValid = $false
         }
     }
     return $isValid
 }
 
-function Invoke-PostInstallConfiguration {
+function Start-PostInstallConfiguration {
     param(
         [Parameter(Mandatory = $true)]
         [psobject]$Package
@@ -388,7 +388,7 @@ function Invoke-PostInstallConfiguration {
     $friendlyName = if ($Package.name) { $Package.name } else { $Package.installId }
 
     if ([string]::IsNullOrWhiteSpace($Package.installId)) {
-        Write-Styled -Type Error -Message "El paquete '$friendlyName' tiene un 'installId' inválido y no se puede procesar la configuración."
+        Write-PhoenixStyledOutput -Type Error -Message "El paquete '$friendlyName' tiene un 'installId' inválido y no se puede procesar la configuración."
         return
     }
 
@@ -396,18 +396,18 @@ function Invoke-PostInstallConfiguration {
     $sourceConfigDir = Join-Path (Join-Path $projectRoot "assets/configs") $Package.installId
 
     if (-not (Test-Path $sourceConfigDir)) {
-        Write-Styled -Type Warn -Message "No se encontró un directorio de configuración de origen para '$friendlyName' en '$sourceConfigDir'."
+        Write-PhoenixStyledOutput -Type Warn -Message "No se encontró un directorio de configuración de origen para '$friendlyName' en '$sourceConfigDir'."
         return
     }
 
     if (-not ($Package.PSObject.Properties.Match('configPaths') -and $Package.configPaths)) {
-        Write-Styled -Type Warn -Message "El paquete '$friendlyName' está marcado para post-configuración pero no define 'configPaths' en el catálogo."
+        Write-PhoenixStyledOutput -Type Warn -Message "El paquete '$friendlyName' está marcado para post-configuración pero no define 'configPaths' en el catálogo."
         return
     }
 
-    Write-Styled -Type Consent -Message "El paquete '$friendlyName' tiene una configuración de productividad/accesibilidad disponible."
-    if ('N' -eq (Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage '¿Desea aplicar esta configuración ahora?')[0]) {
-        Write-Styled -Type Info -Message "Se omitió la aplicación de la configuración para '$friendlyName'."
+    Write-PhoenixStyledOutput -Type Consent -Message "El paquete '$friendlyName' tiene una configuración de productividad/accesibilidad disponible."
+    if ('N' -eq (Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage '¿Desea aplicar esta configuración ahora?')[0]) {
+        Write-PhoenixStyledOutput -Type Info -Message "Se omitió la aplicación de la configuración para '$friendlyName'."
         return
     }
 
@@ -421,50 +421,50 @@ function Invoke-PostInstallConfiguration {
     }
 
     if (-not $destinationPath) {
-        Write-Styled -Type Error -Message "No se pudo encontrar una ruta de instalación válida para '$friendlyName' en ninguna de las siguientes ubicaciones:"
-        $Package.configPaths | ForEach-Object { Write-Styled -Type Log -Message "- $_" }
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Error -Message "No se pudo encontrar una ruta de instalación válida para '$friendlyName' en ninguna de las siguientes ubicaciones:"
+        $Package.configPaths | ForEach-Object { Write-PhoenixStyledOutput -Type Log -Message "- $_" }
+        Request-Continuation
         return
     }
 
-    Write-Styled -Type Info -Message "Aplicando configuración para '$friendlyName' en '$destinationPath'..."
+    Write-PhoenixStyledOutput -Type Info -Message "Aplicando configuración para '$friendlyName' en '$destinationPath'..."
 
     try {
         if (-not (Test-Path $destinationPath)) {
-            Write-Styled -Type SubStep -Message "El directorio de destino no existe, creándolo..."
+            Write-PhoenixStyledOutput -Type SubStep -Message "El directorio de destino no existe, creándolo..."
             New-Item -Path $destinationPath -ItemType Directory -Force -ErrorAction Stop | Out-Null
         }
 
         $sourceFiles = Get-ChildItem -Path $sourceConfigDir
         if ($sourceFiles.Count -eq 0) {
-            Write-Styled -Type Warn -Message "El directorio de configuración de origen está vacío."
+            Write-PhoenixStyledOutput -Type Warn -Message "El directorio de configuración de origen está vacío."
             return
         }
 
         foreach ($file in $sourceFiles) {
             $destinationFile = Join-Path $destinationPath $file.Name
-            Write-Styled -Type SubStep -Message "Copiando '$($file.Name)'..."
+            Write-PhoenixStyledOutput -Type SubStep -Message "Copiando '$($file.Name)'..."
             Copy-Item -Path $file.FullName -Destination $destinationFile -Force -ErrorAction Stop
         }
 
-        Write-Styled -Type Success -Message "La configuración para '$friendlyName' se ha aplicado correctamente."
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Success -Message "La configuración para '$friendlyName' se ha aplicado correctamente."
+        Request-Continuation
     } catch {
-        Write-Styled -Type Error -Message "Ocurrió un error al aplicar la configuración para '$friendlyName'."
-        Write-Styled -Type Log -Message "Ruta de origen: $sourceConfigDir"
-        Write-Styled -Type Log -Message "Ruta de destino: $destinationPath"
-        Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error al aplicar la configuración para '$friendlyName'."
+        Write-PhoenixStyledOutput -Type Log -Message "Ruta de origen: $sourceConfigDir"
+        Write-PhoenixStyledOutput -Type Log -Message "Ruta de destino: $destinationPath"
+        Write-PhoenixStyledOutput -Type Log -Message "Error: $($_.Exception.Message)"
+        Request-Continuation
     }
 }
 
 #region Environment Functions
-function Invoke-EnsureFileEncoding {
+function Set-FileEncodingToUtf8 {
     param(
         [string]$BasePath,
         [string[]]$Extensions
     )
-    Write-Styled -Type Step -Message "Verificando la codificación de los ficheros del script..."
+    Write-PhoenixStyledOutput -Type Step -Message "Verificando la codificación de los ficheros del script..."
 
     $files = Get-ChildItem -Path $BasePath -Recurse -Include $Extensions -File
     $utf8Bom = [byte[]](0xEF, 0xBB, 0xBF)
@@ -482,26 +482,26 @@ function Invoke-EnsureFileEncoding {
             }
 
             if (-not $hasBom) {
-                Write-Styled -Type SubStep -Message "Convirtiendo a UTF-8 con BOM: $($file.Name)"
+                Write-PhoenixStyledOutput -Type SubStep -Message "Convirtiendo a UTF-8 con BOM: $($file.Name)"
                 $content = Get-Content -Path $file.FullName
                 Set-Content -Path $file.FullName -Value $content -Encoding UTF8 -Force
                 $convertedCount++
             }
         } catch {
-            Write-Styled -Type Warn -Message "No se pudo procesar el fichero '$($file.Name)'. Error: $($_.Exception.Message)"
+            Write-PhoenixStyledOutput -Type Warn -Message "No se pudo procesar el fichero '$($file.Name)'. Error: $($_.Exception.Message)"
         }
     }
 
     if ($convertedCount -gt 0) {
-        Write-Styled -Type Success -Message "Conversión de codificación completada para $convertedCount fichero(s)."
+        Write-PhoenixStyledOutput -Type Success -Message "Conversión de codificación completada para $convertedCount fichero(s)."
     } else {
-        Write-Styled -Type Success -Message "Todos los ficheros ya tienen la codificación correcta (UTF-8 con BOM)."
+        Write-PhoenixStyledOutput -Type Success -Message "Todos los ficheros ya tienen la codificación correcta (UTF-8 con BOM)."
     }
 }
 #endregion
 
 #region Package Management Helpers
-function Invoke-ProcessPackageCatalog {
+function Get-PackageStatusFromCatalog {
     [CmdletBinding()]
     param(
         [string]$ManagerName,

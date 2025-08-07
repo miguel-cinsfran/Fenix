@@ -12,23 +12,23 @@
 #>
 
 #region Internal Functions
-function _Enable-WindowsFeature {
+function Enable-WindowsOptionalFeature {
     param([string]$FeatureName)
-    Write-Styled -Type SubStep -Message "Habilitando la característica de Windows: '$FeatureName'..."
-    $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /Enable-Feature /FeatureName:$FeatureName /All /NoRestart" -Activity "Habilitando $FeatureName" -ProgressRegex '\s(\d+)\s*%'
+    Write-PhoenixStyledOutput -Type SubStep -Message "Habilitando la característica de Windows: '$FeatureName'..."
+    $result = Invoke-NativeCommandWithOutputCapture -Executable "Dism.exe" -ArgumentList "/Online /Enable-Feature /FeatureName:$FeatureName /All /NoRestart" -Activity "Habilitando $FeatureName" -ProgressRegex '\s(\d+)\s*%'
     if (-not $result.Success) {
         throw "DISM falló al intentar habilitar '$FeatureName'. Salida: $($result.Output)"
     }
-    Write-Styled -Type Warn -Message "Se ha habilitado la característica '$FeatureName'. Se requiere un reinicio para completar la instalación."
+    Write-PhoenixStyledOutput -Type Warn -Message "Se ha habilitado la característica '$FeatureName'. Se requiere un reinicio para completar la instalación."
 }
 
-function _Initial-WslCheckAndInstall {
-    Write-Styled -Type Step -Message "Verificando el estado actual de WSL..."
-    $statusResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--status" -FailureStrings "no está instalado" -Activity "Verificando estado de WSL"
+function Test-WslInstallation {
+    Write-PhoenixStyledOutput -Type Step -Message "Verificando el estado actual de WSL..."
+    $statusResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--status" -FailureStrings "no está instalado" -Activity "Verificando estado de WSL"
 
     if (-not $statusResult.Success) {
-        Write-Styled -Type Warn -Message "WSL no está instalado o no es funcional."
-        Write-Styled -Type Step -Message "Verificando prerrequisitos de Windows (VirtualMachinePlatform y Subsystem-Linux)..."
+        Write-PhoenixStyledOutput -Type Warn -Message "WSL no está instalado o no es funcional."
+        Write-PhoenixStyledOutput -Type Step -Message "Verificando prerrequisitos de Windows (VirtualMachinePlatform y Subsystem-Linux)..."
 
         $featuresToEnable = @()
         try {
@@ -39,56 +39,56 @@ function _Initial-WslCheckAndInstall {
         }
 
         if ($featuresToEnable.Count -gt 0) {
-            Write-Styled -Type Warn -Message "Las siguientes características de Windows son necesarias y no están habilitadas:"
-            $featuresToEnable | ForEach-Object { Write-Styled -Type Info -Message "  - $_" }
-            if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a habilitar estas características?") -eq 'S') {
-                foreach ($feature in $featuresToEnable) { _Enable-WindowsFeature -FeatureName $feature }
-                Invoke-RestartPrompt
+            Write-PhoenixStyledOutput -Type Warn -Message "Las siguientes características de Windows son necesarias y no están habilitadas:"
+            $featuresToEnable | ForEach-Object { Write-PhoenixStyledOutput -Type Info -Message "  - $_" }
+            if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Autoriza al script a habilitar estas características?") -eq 'S') {
+                foreach ($feature in $featuresToEnable) { Enable-WindowsOptionalFeature -FeatureName $feature }
+                Confirm-SystemRestart
                 return $false # Needs restart
             } else {
-                Write-Styled -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos."
-                Pause-And-Return
+                Write-PhoenixStyledOutput -Type Error -Message "Operación cancelada. No se pueden cumplir los prerrequisitos."
+                Request-Continuation
                 return $false # Cannot proceed
             }
         }
 
-        Write-Styled -Type Success -Message "Todos los prerrequisitos de Windows ya están habilitados."
-        Write-Styled -Type Step -Message "Procediendo con la instalación de WSL..."
-        $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install" -FailureStrings "Error" -Activity "Instalando WSL" -IdleTimeoutEnabled:$false -ProgressRegex '\s(\d+)\s*%'
+        Write-PhoenixStyledOutput -Type Success -Message "Todos los prerrequisitos de Windows ya están habilitados."
+        Write-PhoenixStyledOutput -Type Step -Message "Procediendo con la instalación de WSL..."
+        $installResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--install" -FailureStrings "Error" -Activity "Instalando WSL" -IdleTimeoutEnabled:$false -ProgressRegex '\s(\d+)\s*%'
         if (-not $installResult.Success) {
             throw "La instalación de WSL falló. Salida: $($installResult.Output)"
         }
 
-        Write-Styled -Type Success -Message "La instalación de WSL parece haber sido exitosa."
-        Write-Styled -Type Warn -Message "Se requiere un REINICIO del sistema para finalizar la instalación de WSL."
-        Invoke-RestartPrompt
+        Write-PhoenixStyledOutput -Type Success -Message "La instalación de WSL parece haber sido exitosa."
+        Write-PhoenixStyledOutput -Type Warn -Message "Se requiere un REINICIO del sistema para finalizar la instalación de WSL."
+        Confirm-SystemRestart
         return $false # Needs restart
     }
 
-    Write-Styled -Type Success -Message "WSL ya está instalado y operativo."
+    Write-PhoenixStyledOutput -Type Success -Message "WSL ya está instalado y operativo."
     return $true # WSL is operational
 }
 
-function _Disable-WindowsFeature {
+function Disable-WindowsOptionalFeature {
     param([string]$FeatureName)
-    Write-Styled -Type SubStep -Message "Deshabilitando la característica de Windows: '$FeatureName'..."
-    $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /Disable-Feature /FeatureName:$FeatureName /NoRestart" -Activity "Deshabilitando $FeatureName"
+    Write-PhoenixStyledOutput -Type SubStep -Message "Deshabilitando la característica de Windows: '$FeatureName'..."
+    $result = Invoke-NativeCommandWithOutputCapture -Executable "Dism.exe" -ArgumentList "/Online /Disable-Feature /FeatureName:$FeatureName /NoRestart" -Activity "Deshabilitando $FeatureName"
     if (-not $result.Success) {
         throw "DISM falló al intentar deshabilitar '$FeatureName'. Salida: $($result.Output)"
     }
-    Write-Styled -Type Warn -Message "Se ha deshabilitado la característica '$FeatureName'. Se requiere un reinicio para aplicar el cambio."
+    Write-PhoenixStyledOutput -Type Warn -Message "Se ha deshabilitado la característica '$FeatureName'. Se requiere un reinicio para aplicar el cambio."
 }
 #endregion
 
 #region Menu Functions
 
-function _Get-AvailableWslDistros {
-    Write-Styled -Type SubStep -Message "Consultando la lista de distribuciones disponibles en línea..."
-    $onlineResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --online" -Activity "Buscando distribuciones disponibles"
+function Get-AvailableWslDistro {
+    Write-PhoenixStyledOutput -Type SubStep -Message "Consultando la lista de distribuciones disponibles en línea..."
+    $onlineResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--list --online" -Activity "Buscando distribuciones disponibles"
 
     if (-not $onlineResult.Success) {
-        Write-Styled -Type Error -Message "No se pudo obtener la lista de distribuciones disponibles desde Microsoft Store."
-        Write-Styled -Type Log -Message "Error: $($onlineResult.Output)"
+        Write-PhoenixStyledOutput -Type Error -Message "No se pudo obtener la lista de distribuciones disponibles desde Microsoft Store."
+        Write-PhoenixStyledOutput -Type Log -Message "Error: $($onlineResult.Output)"
         return $null # Devolver null en caso de fallo del comando.
     }
 
@@ -131,69 +131,69 @@ function _Get-AvailableWslDistros {
     }
 
     if ($distros.Count -eq 0) {
-        Write-Styled -Type Warn -Message "No se pudieron analizar distribuciones de la salida de WSL. Es posible que no haya distribuciones nuevas o que el formato de salida haya cambiado."
-        Write-Styled -Type Log -Message "Salida recibida de WSL:"
-        $onlineResult.Output.Split([System.Environment]::NewLine) | ForEach-Object { Write-Styled -Type Log -Message $_ }
+        Write-PhoenixStyledOutput -Type Warn -Message "No se pudieron analizar distribuciones de la salida de WSL. Es posible que no haya distribuciones nuevas o que el formato de salida haya cambiado."
+        Write-PhoenixStyledOutput -Type Log -Message "Salida recibida de WSL:"
+        $onlineResult.Output.Split([System.Environment]::NewLine) | ForEach-Object { Write-PhoenixStyledOutput -Type Log -Message $_ }
     }
 
     return $distros
 }
 
-function Invoke-WslUpdateCheck {
-    Show-Header -Title "Estado y Actualizaciones de WSL" -NoClear
+function Start-WslUpdateCheck {
+    Show-PhoenixHeader -Title "Estado y Actualizaciones de WSL" -NoClear
 
-    Write-Styled -Type Step -Message "Obteniendo el estado actual de WSL..."
-    $statusResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--status" -Activity "Obteniendo estado de WSL"
+    Write-PhoenixStyledOutput -Type Step -Message "Obteniendo el estado actual de WSL..."
+    $statusResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--status" -Activity "Obteniendo estado de WSL"
 
     if ($statusResult.Success) {
         Write-Host $statusResult.Output
     } else {
-        Write-Styled -Type Error -Message "No se pudo obtener el estado de WSL."
+        Write-PhoenixStyledOutput -Type Error -Message "No se pudo obtener el estado de WSL."
         Write-Host $statusResult.Output
-        Pause-And-Return
+        Request-Continuation
         return # Salir si no se puede obtener el estado.
     }
 
     Write-Host # Añadir una línea en blanco para espaciar.
 
-    Write-Styled -Type Consent -Message "Esta opción buscará e instalará automáticamente la última versión del núcleo de WSL."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea buscar actualizaciones ahora?") -ne 'S') {
-        Write-Styled -Type Info -Message "Operación de actualización cancelada."
-        Pause-And-Return
+    Write-PhoenixStyledOutput -Type Consent -Message "Esta opción buscará e instalará automáticamente la última versión del núcleo de WSL."
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea buscar actualizaciones ahora?") -ne 'S') {
+        Write-PhoenixStyledOutput -Type Info -Message "Operación de actualización cancelada."
+        Request-Continuation
         return
     }
 
-    Write-Styled -Type Step -Message "Buscando e instalando actualizaciones..."
-    $updateResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--update" -Activity "Actualizando WSL" -IdleTimeoutEnabled:$false
+    Write-PhoenixStyledOutput -Type Step -Message "Buscando e instalando actualizaciones..."
+    $updateResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--update" -Activity "Actualizando WSL" -IdleTimeoutEnabled:$false
 
     if ($updateResult.Success) {
-        Write-Styled -Type Success -Message "Proceso de actualización completado."
+        Write-PhoenixStyledOutput -Type Success -Message "Proceso de actualización completado."
         Write-Host $updateResult.Output
     } else {
-        Write-Styled -Type Error -Message "Ocurrió un error durante el proceso de actualización."
+        Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error durante el proceso de actualización."
         Write-Host $updateResult.Output
     }
 
-    Pause-And-Return
+    Request-Continuation
 }
 
-function Show-InstalledDistrosMenu {
+function Show-InstalledDistroMenu {
     while ($true) { # Bucle principal para permitir refrescar la lista.
-        Show-Header -Title "Administrar Distribuciones Instaladas" -NoClear
+        Show-PhoenixHeader -Title "Administrar Distribuciones Instaladas" -NoClear
 
-        $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list --verbose" -Activity "Listando distribuciones instaladas"
+        $listResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--list --verbose" -Activity "Listando distribuciones instaladas"
 
         if (-not $listResult.Success) {
-            Write-Styled -Type Error -Message "No se pudo obtener la lista de distribuciones instaladas."
-            Write-Styled -Type Log -Message "Error: $($listResult.Output)"
-            Pause-And-Return
+            Write-PhoenixStyledOutput -Type Error -Message "No se pudo obtener la lista de distribuciones instaladas."
+            Write-PhoenixStyledOutput -Type Log -Message "Error: $($listResult.Output)"
+            Request-Continuation
             return
         }
 
         # Comprobar mensajes conocidos de 'no hay distros'.
         if ($listResult.Output -match "No hay distribuciones instaladas" -or $listResult.Output -match "There are no installed distributions") {
-            Write-Styled -Type Warn -Message "No se encontraron distribuciones de Linux instaladas."
-            Pause-And-Return
+            Write-PhoenixStyledOutput -Type Warn -Message "No se encontraron distribuciones de Linux instaladas."
+            Request-Continuation
             return
         }
 
@@ -215,8 +215,8 @@ function Show-InstalledDistrosMenu {
         }
 
         if ($distros.Count -eq 0) {
-            Write-Styled -Type Warn -Message "No se pudieron analizar las distribuciones instaladas."
-            Pause-And-Return
+            Write-PhoenixStyledOutput -Type Warn -Message "No se pudieron analizar las distribuciones instaladas."
+            Request-Continuation
             return
         }
 
@@ -228,7 +228,7 @@ function Show-InstalledDistrosMenu {
         }
 
         $actionOptions = @{ "V" = "Volver al menú principal" }
-        $distroChoice = Invoke-StandardMenu -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una distribución para administrar"
+        $distroChoice = Show-PhoenixStandardMenu -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una distribución para administrar"
 
         if ($distroChoice -eq 'V') { return }
 
@@ -236,7 +236,7 @@ function Show-InstalledDistrosMenu {
 
         # Submenú para la distribución seleccionada.
         $subHeader = "Administrando: $($selectedDistro.Name) (Estado: $($selectedDistro.State), Versión: $($selectedDistro.Version))"
-        Show-Header -Title $subHeader -NoClear
+        Show-PhoenixHeader -Title $subHeader -NoClear
 
         $subPrompt = @"
 Seleccione una acción para '$($selectedDistro.Name)':
@@ -246,35 +246,35 @@ Seleccione una acción para '$($selectedDistro.Name)':
   V. Volver a la lista de distribuciones
 "@
         Write-Host $subPrompt
-        $subChoice = Invoke-MenuPrompt -ValidChoices @('1', '2', '3', 'V') -PromptMessage "Acción"
+        $subChoice = Request-MenuSelection -ValidChoices @('1', '2', '3', 'V') -PromptMessage "Acción"
 
         switch ($subChoice) {
             '1' { # Desinstalar
-                Write-Styled -Type Consent -Message "¡ADVERTENCIA! Esto eliminará permanentemente la distribución '$($selectedDistro.Name)' y todos sus datos."
-                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?") -eq 'S') {
-                    Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--unregister $($selectedDistro.Name)" -Activity "Desinstalando $($selectedDistro.Name)"
-                    Write-Styled -Type Success -Message "'$($selectedDistro.Name)' ha sido desinstalada."
-                    Pause-And-Return
+                Write-PhoenixStyledOutput -Type Consent -Message "¡ADVERTENCIA! Esto eliminará permanentemente la distribución '$($selectedDistro.Name)' y todos sus datos."
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?") -eq 'S') {
+                    Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--unregister $($selectedDistro.Name)" -Activity "Desinstalando $($selectedDistro.Name)"
+                    Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' ha sido desinstalada."
+                    Request-Continuation
                     break # Romper el switch para forzar un refresco de la lista.
                 }
             }
             '2' { # Establecer como predeterminada
-                Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--set-default $($selectedDistro.Name)" -Activity "Estableciendo $($selectedDistro.Name) como predeterminada"
-                Write-Styled -Type Success -Message "'$($selectedDistro.Name)' es ahora la distribución predeterminada."
-                Pause-And-Return
+                Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--set-default $($selectedDistro.Name)" -Activity "Estableciendo $($selectedDistro.Name) como predeterminada"
+                Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' es ahora la distribución predeterminada."
+                Request-Continuation
             }
             '3' { # Actualizar paquetes
-                Write-Styled -Type Warn -Message "Esta acción intentará actualizar los paquetes usando 'apt'. Esto es común para distros basadas en Debian (Ubuntu, etc.)."
-                Write-Styled -Type Warn -Message "Es posible que se le solicite su contraseña de sudo dentro de la terminal de WSL."
-                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
-                    Write-Styled -Type Info -Message "Lanzando el proceso de actualización para '$($selectedDistro.Name)'. Siga las instrucciones."
+                Write-PhoenixStyledOutput -Type Warn -Message "Esta acción intentará actualizar los paquetes usando 'apt'. Esto es común para distros basadas en Debian (Ubuntu, etc.)."
+                Write-PhoenixStyledOutput -Type Warn -Message "Es posible que se le solicite su contraseña de sudo dentro de la terminal de WSL."
+                if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
+                    Write-PhoenixStyledOutput -Type Info -Message "Lanzando el proceso de actualización para '$($selectedDistro.Name)'. Siga las instrucciones."
                     try {
                         Start-Process wsl -ArgumentList "-d $($selectedDistro.Name) -- sudo apt-get update && sudo apt-get upgrade -y" -Wait -NoNewWindow
-                        Write-Styled -Type Success -Message "El proceso de actualización ha finalizado."
+                        Write-PhoenixStyledOutput -Type Success -Message "El proceso de actualización ha finalizado."
                     } catch {
-                         Write-Styled -Type Error -Message "No se pudo iniciar el proceso de actualización. Error: $($_.Exception.Message)"
+                         Write-PhoenixStyledOutput -Type Error -Message "No se pudo iniciar el proceso de actualización. Error: $($_.Exception.Message)"
                     }
-                    Pause-And-Return
+                    Request-Continuation
                 }
             }
             'V' { continue } # Continuar a la siguiente iteración del bucle para mostrar la lista de distros.
@@ -283,21 +283,21 @@ Seleccione una acción para '$($selectedDistro.Name)':
     }
 }
 
-function Show-AvailableDistros {
-    Show-Header -Title "Instalar Nueva Distribución" -NoClear
+function Show-AvailableDistroMenu {
+    Show-PhoenixHeader -Title "Instalar Nueva Distribución" -NoClear
 
     # Usar la función de ayuda para obtener las distros disponibles.
-    $availableDistros = _Get-AvailableWslDistros
+    $availableDistros = Get-AvailableWslDistro
 
     # Manejar el posible fallo de la función de ayuda (retorno nulo).
     if ($null -eq $availableDistros) {
         # El mensaje de error ya fue impreso por la función. Solo esperar al usuario.
-        Pause-And-Return
+        Request-Continuation
         return
     }
 
     # Obtener la lista de distros ya instaladas para filtrarlas.
-    $installedResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones instaladas"
+    $installedResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones instaladas"
     $installedNames = @()
     if ($installedResult.Success) {
         $installedLines = $installedResult.Output -split '\r?\n' | Select-Object -Skip 1
@@ -311,8 +311,8 @@ function Show-AvailableDistros {
 
     # Manejar el caso donde no hay nada nuevo que instalar.
     if ($distrosToDisplay.Count -eq 0) {
-        Write-Styled -Type Info -Message "No hay nuevas distribuciones para instalar. Es posible que todas las disponibles ya estén instaladas."
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Info -Message "No hay nuevas distribuciones para instalar. Es posible que todas las disponibles ya estén instaladas."
+        Request-Continuation
         return
     }
 
@@ -323,41 +323,41 @@ function Show-AvailableDistros {
     }
 
     $actionOptions = @{ "V" = "Volver al menú principal" }
-    $choice = Invoke-StandardMenu -Title "Seleccione una distribución para instalar" -MenuItems $menuItems -ActionOptions $actionOptions
+    $choice = Show-PhoenixStandardMenu -Title "Seleccione una distribución para instalar" -MenuItems $menuItems -ActionOptions $actionOptions
 
     if ($choice -eq 'V') { return }
 
     $selectedDistro = $menuItems[[int]$choice - 1].DistroData
 
-    Write-Styled -Type Consent -Message "Se instalará la distribución '$($selectedDistro.FriendlyName)'."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
-        Write-Styled -Type Step -Message "Instalando $($selectedDistro.FriendlyName)... Esto puede tardar varios minutos."
-        $installResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--install -d $($selectedDistro.Name)" -Activity "Instalando $($selectedDistro.Name)" -IdleTimeoutEnabled:$false -ProgressRegex '(\d+)%\s*$'
+    Write-PhoenixStyledOutput -Type Consent -Message "Se instalará la distribución '$($selectedDistro.FriendlyName)'."
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
+        Write-PhoenixStyledOutput -Type Step -Message "Instalando $($selectedDistro.FriendlyName)... Esto puede tardar varios minutos."
+        $installResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--install -d $($selectedDistro.Name)" -Activity "Instalando $($selectedDistro.Name)" -IdleTimeoutEnabled:$false -ProgressRegex '(\d+)%\s*$'
 
         if ($installResult.Success) {
-            Write-Styled -Type Success -Message "'$($selectedDistro.FriendlyName)' se ha instalado correctamente."
+            Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.FriendlyName)' se ha instalado correctamente."
         } else {
-            Write-Styled -Type Error -Message "Ocurrió un error durante la instalación."
+            Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error durante la instalación."
             Write-Host $installResult.Output
         }
     } else {
-        Write-Styled -Type Info -Message "Instalación cancelada."
+        Write-PhoenixStyledOutput -Type Info -Message "Instalación cancelada."
     }
 
-    Pause-And-Return
+    Request-Continuation
 }
 
-function Manage-WslFeatures {
-    Show-Header -Title "Administrar Características de Windows para WSL" -NoClear
+function Show-WslFeatureMenu {
+    Show-PhoenixHeader -Title "Administrar Características de Windows para WSL" -NoClear
 
-    $wslStatus = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--status" -Activity "Verificando estado de WSL"
+    $wslStatus = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--status" -Activity "Verificando estado de WSL"
     $isWslInstalled = $wslStatus.Success
 
     $features = @("VirtualMachinePlatform", "Microsoft-Windows-Subsystem-Linux")
 
     while ($true) {
-        Show-Header -Title "Administrar Características de Windows para WSL" -NoClear
-        Write-Styled -Type Step -Message "Estado actual de las características requeridas:"
+        Show-PhoenixHeader -Title "Administrar Características de Windows para WSL" -NoClear
+        Write-PhoenixStyledOutput -Type Step -Message "Estado actual de las características requeridas:"
 
         $featureObjects = @()
         foreach ($featureName in $features) {
@@ -368,20 +368,20 @@ function Manage-WslFeatures {
                 $statusColor = if ($featureState -eq 'Enabled') { 'Green' } else { 'Gray' }
                 Write-Host ("{0,-4} {1}" -f $statusIcon, $featureName) -ForegroundColor $statusColor
             } catch {
-                Write-Styled -Type Error -Message "No se pudo obtener el estado de la característica '$featureName'."
+                Write-PhoenixStyledOutput -Type Error -Message "No se pudo obtener el estado de la característica '$featureName'."
                 $featureObjects += [PSCustomObject]@{ Name = $featureName; State = "Error" }
             }
         }
         Write-Host ""
 
         if ($isWslInstalled) {
-            Write-Styled -Type Warn -Message "WSL está instalado. Para evitar problemas, las características no se pueden modificar desde este menú."
-            Write-Styled -Type Warn -Message "Para deshabilitarlas, primero debe desinstalar WSL usando la opción del menú principal."
-            Pause-And-Return
+            Write-PhoenixStyledOutput -Type Warn -Message "WSL está instalado. Para evitar problemas, las características no se pueden modificar desde este menú."
+            Write-PhoenixStyledOutput -Type Warn -Message "Para deshabilitarlas, primero debe desinstalar WSL usando la opción del menú principal."
+            Request-Continuation
             return
         }
 
-        Write-Styled -Type Consent -Message "WSL no está instalado. Puede habilitar o deshabilitar estas características."
+        Write-PhoenixStyledOutput -Type Consent -Message "WSL no está instalado. Puede habilitar o deshabilitar estas características."
         $prompt = @"
 Seleccione una opción:
   1. Habilitar 'VirtualMachinePlatform'
@@ -391,51 +391,51 @@ Seleccione una opción:
   V. Volver al menú principal
 "@
         Write-Host $prompt
-        $choice = Invoke-MenuPrompt -ValidChoices @('1','2','3','4','V') -PromptMessage "Acción"
+        $choice = Request-MenuSelection -ValidChoices @('1','2','3','4','V') -PromptMessage "Acción"
 
         $needsRestart = $false
         switch ($choice) {
-            '1' { _Enable-WindowsFeature -FeatureName "VirtualMachinePlatform"; $needsRestart = $true }
-            '2' { _Disable-WindowsFeature -FeatureName "VirtualMachinePlatform"; $needsRestart = $true }
-            '3' { _Enable-WindowsFeature -FeatureName "Microsoft-Windows-Subsystem-Linux"; $needsRestart = $true }
-            '4' { _Disable-WindowsFeature -FeatureName "Microsoft-Windows-Subsystem-Linux"; $needsRestart = $true }
+            '1' { Enable-WindowsOptionalFeature -FeatureName "VirtualMachinePlatform"; $needsRestart = $true }
+            '2' { Disable-WindowsOptionalFeature -FeatureName "VirtualMachinePlatform"; $needsRestart = $true }
+            '3' { Enable-WindowsOptionalFeature -FeatureName "Microsoft-Windows-Subsystem-Linux"; $needsRestart = $true }
+            '4' { Disable-WindowsOptionalFeature -FeatureName "Microsoft-Windows-Subsystem-Linux"; $needsRestart = $true }
             'V' { return }
         }
 
         if ($needsRestart) {
-            Invoke-RestartPrompt
-            Write-Styled -Type Info -Message "El estado actualizado se reflejará después de un reinicio."
-            Pause-And-Return
+            Confirm-SystemRestart
+            Write-PhoenixStyledOutput -Type Info -Message "El estado actualizado se reflejará después de un reinicio."
+            Request-Continuation
         }
     }
 }
 
-function Invoke-WslUninstall {
-    Show-Header -Title "Desinstalar WSL" -NoClear
+function Start-WslUninstall {
+    Show-PhoenixHeader -Title "Desinstalar WSL" -NoClear
 
-    Write-Styled -Type Error -Message "¡¡¡ADVERTENCIA MUY IMPORTANTE!!!"
-    Write-Styled -Type Warn -Message "Esta operación es destructiva y no se puede deshacer."
-    Write-Styled -Type Warn -Message "Se procederá a desregistrar TODAS las distribuciones de WSL instaladas."
-    Write-Styled -Type Warn -Message "Esto significa que se eliminarán permanentemente todos los datos, archivos y configuraciones dentro de esas distribuciones."
+    Write-PhoenixStyledOutput -Type Error -Message "¡¡¡ADVERTENCIA MUY IMPORTANTE!!!"
+    Write-PhoenixStyledOutput -Type Warn -Message "Esta operación es destructiva y no se puede deshacer."
+    Write-PhoenixStyledOutput -Type Warn -Message "Se procederá a desregistrar TODAS las distribuciones de WSL instaladas."
+    Write-PhoenixStyledOutput -Type Warn -Message "Esto significa que se eliminarán permanentemente todos los datos, archivos y configuraciones dentro de esas distribuciones."
     Write-Host ""
 
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Entiende las consecuencias y desea continuar?") -ne 'S') {
-        Write-Styled -Type Info -Message "Operación de desinstalación cancelada."
-        Pause-And-Return
+    if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Entiende las consecuencias y desea continuar?") -ne 'S') {
+        Write-PhoenixStyledOutput -Type Info -Message "Operación de desinstalación cancelada."
+        Request-Continuation
         return
     }
 
-    Write-Styled -Type Consent -Message "Para confirmar esta acción, por favor escriba la palabra 'DESINSTALAR' y presione Enter."
+    Write-PhoenixStyledOutput -Type Consent -Message "Para confirmar esta acción, por favor escriba la palabra 'DESINSTALAR' y presione Enter."
     $confirmation = Read-Host
     if ($confirmation.Trim().ToUpper() -ne 'DESINSTALAR') {
-        Write-Styled -Type Info -Message "La confirmación no coincide. Operación de desinstalación cancelada."
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Info -Message "La confirmación no coincide. Operación de desinstalación cancelada."
+        Request-Continuation
         return
     }
 
-    Write-Styled -Type Step -Message "Procediendo con la desinstalación de las distribuciones de WSL..."
+    Write-PhoenixStyledOutput -Type Step -Message "Procediendo con la desinstalación de las distribuciones de WSL..."
 
-    $listResult = Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones para desinstalar"
+    $listResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones para desinstalar"
     if ($listResult.Success -and $listResult.Output -notmatch "No hay distribuciones instaladas") {
         $lines = $listResult.Output -split '\r?\n' | Select-Object -Skip 1
         $distrosToUninstall = foreach ($line in $lines) {
@@ -445,47 +445,47 @@ function Invoke-WslUninstall {
         }
 
         foreach ($distro in $distrosToUninstall) {
-            Write-Styled -Type SubStep -Message "Desregistrando '$distro'..."
-            Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--unregister `"$distro`"" -Activity "Desregistrando $distro"
+            Write-PhoenixStyledOutput -Type SubStep -Message "Desregistrando '$distro'..."
+            Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--unregister `"$distro`"" -Activity "Desregistrando $distro"
         }
-        Write-Styled -Type Success -Message "Todas las distribuciones han sido desregistradas."
+        Write-PhoenixStyledOutput -Type Success -Message "Todas las distribuciones han sido desregistradas."
     } else {
-        Write-Styled -Type Info -Message "No se encontraron distribuciones instaladas para desregistrar."
+        Write-PhoenixStyledOutput -Type Info -Message "No se encontraron distribuciones instaladas para desregistrar."
     }
 
-    Write-Styled -Type Step -Message "Apagando el subsistema de WSL..."
-    Invoke-NativeCommand -Executable "wsl.exe" -ArgumentList "--shutdown" -Activity "Apagando WSL"
+    Write-PhoenixStyledOutput -Type Step -Message "Apagando el subsistema de WSL..."
+    Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--shutdown" -Activity "Apagando WSL"
 
-    Write-Styled -Type Success -Message "El proceso de limpieza de distribuciones ha finalizado."
+    Write-PhoenixStyledOutput -Type Success -Message "El proceso de limpieza de distribuciones ha finalizado."
     Write-Host ""
-    Write-Styled -Type Step -Message "PASO FINAL REQUERIDO MANUALMENTE:"
-    Write-Styled -Type Info -Message "Para completar la desinstalación, debe desinstalar la aplicación 'Subsistema de Windows para Linux'."
-    Write-Styled -Type Info -Message "1. Abra el menú Inicio y busque 'Aplicaciones y características'."
-    Write-Styled -Type Info -Message "2. En la lista de aplicaciones, busque 'Subsistema de Windows para Linux'."
-    Write-Styled -Type Info -Message "3. Haga clic en él y seleccione 'Desinstalar'."
-    Write-Styled -Type Warn -Message "Es posible que se requiera un reinicio después de este paso."
+    Write-PhoenixStyledOutput -Type Step -Message "PASO FINAL REQUERIDO MANUALMENTE:"
+    Write-PhoenixStyledOutput -Type Info -Message "Para completar la desinstalación, debe desinstalar la aplicación 'Subsistema de Windows para Linux'."
+    Write-PhoenixStyledOutput -Type Info -Message "1. Abra el menú Inicio y busque 'Aplicaciones y características'."
+    Write-PhoenixStyledOutput -Type Info -Message "2. En la lista de aplicaciones, busque 'Subsistema de Windows para Linux'."
+    Write-PhoenixStyledOutput -Type Info -Message "3. Haga clic en él y seleccione 'Desinstalar'."
+    Write-PhoenixStyledOutput -Type Warn -Message "Es posible que se requiera un reinicio después de este paso."
     Write-Host ""
-    Write-Styled -Type Info -Message "Si desea también deshabilitar las características de Windows subyacentes, puede usar la opción 'Administrar características' en el menú anterior DESPUÉS de reiniciar."
+    Write-PhoenixStyledOutput -Type Info -Message "Si desea también deshabilitar las características de Windows subyacentes, puede usar la opción 'Administrar características' en el menú anterior DESPUÉS de reiniciar."
 
-    Pause-And-Return
+    Request-Continuation
 }
 #endregion
 
 
-function Invoke-Phase4_WSL {
-    Show-Header -Title "FASE 4: Administración de WSL2"
+function Invoke-WslPhase {
+    Show-PhoenixHeader -Title "FASE 4: Administración de WSL2"
 
     try {
-        $wslOperational = _Initial-WslCheckAndInstall
+        $wslOperational = Test-WslInstallation
         if (-not $wslOperational) {
-            Write-Styled -Type Info -Message "La configuración de WSL no está completa o requiere un reinicio. Saliendo del módulo de WSL."
-            Pause-And-Return
+            Write-PhoenixStyledOutput -Type Info -Message "La configuración de WSL no está completa o requiere un reinicio. Saliendo del módulo de WSL."
+            Request-Continuation
             return
         }
 
         # Bucle del Menú Principal
         while ($true) {
-            Show-Header -Title "Administración de WSL" -NoClear
+            Show-PhoenixHeader -Title "Administración de WSL" -NoClear
 
             $menuItems = @(
                 @{ Description = "Ver estado y buscar actualizaciones de WSL" },
@@ -499,23 +499,23 @@ function Invoke-Phase4_WSL {
                 "S" = "Salir"
             }
 
-            $choices = Invoke-StandardMenu -Title "Menú Principal de WSL" -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una tarea"
+            $choices = Show-PhoenixStandardMenu -Title "Menú Principal de WSL" -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una tarea"
             if ($choices.Count -eq 0) { continue }
 
             foreach ($choice in $choices) {
                 switch ($choice) {
-                    "1" { Invoke-WslUpdateCheck }
-                    "2" { Show-InstalledDistrosMenu }
-                    "3" { Show-AvailableDistros }
-                    "4" { Manage-WslFeatures }
-                    "5" { Invoke-WslUninstall }
-                    "S" { Write-Styled -Type Info -Message "Saliendo del menú de WSL."; return }
+                    "1" { Start-WslUpdateCheck }
+                    "2" { Show-InstalledDistroMenu }
+                    "3" { Show-AvailableDistroMenu }
+                    "4" { Show-WslFeatureMenu }
+                    "5" { Start-WslUninstall }
+                    "S" { Write-PhoenixStyledOutput -Type Info -Message "Saliendo del menú de WSL."; return }
                 }
             }
         }
     } catch {
-        Write-Styled -Type Error -Message "Error fatal en el módulo de WSL: $($_.Exception.Message)"
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Error -Message "Error fatal en el módulo de WSL: $($_.Exception.Message)"
+        Request-Continuation
     }
 }
 

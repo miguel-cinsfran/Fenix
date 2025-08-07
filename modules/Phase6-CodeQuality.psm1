@@ -50,17 +50,17 @@ $global:CorruptionMap = @{
 #endregion
 
 #region Funciones de Lógica Interna
-function _Analyze-Directory {
+function Get-CodeQualityIssue {
     param([hashtable]$Config)
 
-    Write-Styled -Type Step -Message "Iniciando análisis en: $($Config.TargetDirectory)"
-    Write-Styled -Type Info -Message "Extensiones objetivo: $($Config.TargetExtensions -join ', ')"
+    Write-PhoenixStyledOutput -Type Step -Message "Iniciando análisis en: $($Config.TargetDirectory)"
+    Write-PhoenixStyledOutput -Type Info -Message "Extensiones objetivo: $($Config.TargetExtensions -join ', ')"
 
     $filesToProcess = @()
     $allFiles = Get-ChildItem -Path $Config.TargetDirectory -Recurse -Include $Config.TargetExtensions -File -ErrorAction SilentlyContinue
 
     if ($allFiles.Count -eq 0) {
-        Write-Styled -Type Warn -Message "No se encontraron ficheros que coincidan con las extensiones en el directorio especificado."
+        Write-PhoenixStyledOutput -Type Warn -Message "No se encontraron ficheros que coincidan con las extensiones en el directorio especificado."
         return $null
     }
 
@@ -102,24 +102,24 @@ function _Analyze-Directory {
                 $filesToProcess += [PSCustomObject]@{ Path = $file.FullName; Reason = $reason.Trim() }
             }
         } catch {
-            Write-Styled -Type Error -Message "No se pudo analizar el fichero '$($file.Name)'. Saltando. Error: $($_.Exception.Message)"
+            Write-PhoenixStyledOutput -Type Error -Message "No se pudo analizar el fichero '$($file.Name)'. Saltando. Error: $($_.Exception.Message)"
         }
     }
 
     return $filesToProcess
 }
 
-function _Execute-Sanitization {
+function Start-CodeQualitySanitization {
     param(
         [array]$FilesToProcess,
         [hashtable]$Config
     )
-    Write-Styled -Type Step -Message "Iniciando proceso de saneamiento para $($FilesToProcess.Count) fichero(s)..."
+    Write-PhoenixStyledOutput -Type Step -Message "Iniciando proceso de saneamiento para $($FilesToProcess.Count) fichero(s)..."
     $failedFiles = @()
     $newLineChar = if ($Config.LineEnding -eq 'LF') { "`n" } else { "`r`n" }
 
     foreach ($fileInfo in $FilesToProcess) {
-        Write-Styled -Type SubStep -Message "Procesando: $($fileInfo.Path)"
+        Write-PhoenixStyledOutput -Type SubStep -Message "Procesando: $($fileInfo.Path)"
         try {
             $fileContentLines = Get-Content -Path $fileInfo.Path -ErrorAction Stop
             $processedLines = @()
@@ -146,69 +146,69 @@ function _Execute-Sanitization {
 
             # La corrección de finales de línea y BOM se aplica al guardar
             Set-Content -Path $fileInfo.Path -Value $fullContent -Encoding UTF8 -Force -NoNewline -ErrorAction Stop
-            Write-Styled -Type Success -Message "Fichero saneado y guardado como UTF-8 con BOM."
+            Write-PhoenixStyledOutput -Type Success -Message "Fichero saneado y guardado como UTF-8 con BOM."
 
         } catch {
-            Write-Styled -Type Error -Message "No se pudo procesar este fichero. Error: $($_.Exception.Message)"
+            Write-PhoenixStyledOutput -Type Error -Message "No se pudo procesar este fichero. Error: $($_.Exception.Message)"
             $failedFiles += [PSCustomObject]@{ Path = $fileInfo.Path; Error = $_.Exception.Message }
         }
     }
 
-    Write-Styled -Type Step -Message "Proceso de saneamiento finalizado."
+    Write-PhoenixStyledOutput -Type Step -Message "Proceso de saneamiento finalizado."
     if ($failedFiles.Count -gt 0) {
-        Write-Styled -Type Warn -Message "$($failedFiles.Count) fichero(s) no pudieron ser procesados. Revise los errores anteriores."
+        Write-PhoenixStyledOutput -Type Warn -Message "$($failedFiles.Count) fichero(s) no pudieron ser procesados. Revise los errores anteriores."
     }
 }
 #endregion
 
 #region Funciones de Menú y UI
-function _Show-Current-Configuration {
-    Show-Header -Title "Configuración Actual de Saneamiento"
-    Write-Styled -Type Title -Message "Directorio Objetivo:"
-    Write-Styled -Type Info -Message "  $($global:CodeQualityConfig.TargetDirectory)"
+function Show-CodeQualityConfiguration {
+    Show-PhoenixHeader -Title "Configuración Actual de Saneamiento"
+    Write-PhoenixStyledOutput -Type Title -Message "Directorio Objetivo:"
+    Write-PhoenixStyledOutput -Type Info -Message "  $($global:CodeQualityConfig.TargetDirectory)"
     Write-Host
 
-    Write-Styled -Type Title -Message "Extensiones Objetivo:"
-    Write-Styled -Type Info -Message "  $($global:CodeQualityConfig.TargetExtensions -join ', ')"
+    Write-PhoenixStyledOutput -Type Title -Message "Extensiones Objetivo:"
+    Write-PhoenixStyledOutput -Type Info -Message "  $($global:CodeQualityConfig.TargetExtensions -join ', ')"
     Write-Host
 
-    Write-Styled -Type Title -Message "Reglas de Saneamiento:"
+    Write-PhoenixStyledOutput -Type Title -Message "Reglas de Saneamiento:"
     $global:CodeQualityConfig.Rules.GetEnumerator() | ForEach-Object {
         $status = if ($_.Value) { "[ACTIVADO]" } else { "[DESACTIVADO]" }
         $color = if ($_.Value) { 'Success' } else { 'Error' }
-        Write-Styled -Type $color -Message "  $($_.Name): $status"
+        Write-PhoenixStyledOutput -Type $color -Message "  $($_.Name): $status"
     }
     Write-Host
 
-    Write-Styled -Type Title -Message "Formato de Fin de Línea:"
-    Write-Styled -Type Info -Message "  $($global:CodeQualityConfig.LineEnding)"
+    Write-PhoenixStyledOutput -Type Title -Message "Formato de Fin de Línea:"
+    Write-PhoenixStyledOutput -Type Info -Message "  $($global:CodeQualityConfig.LineEnding)"
     Write-Host
 }
 
-function _Configure-Sanitization-Rules {
+function Show-CodeQualityRuleMenu {
     $exitMenu = $false
     while (-not $exitMenu) {
-        Show-Header -Title "Configurar Reglas de Saneamiento"
+        Show-PhoenixHeader -Title "Configurar Reglas de Saneamiento"
 
         # Opciones de Reglas
-        Write-Styled -Type Step -Message "[1] Cambiar Directorio Objetivo"
-        Write-Styled -Type Info -Message "    Actual: $($global:CodeQualityConfig.TargetDirectory)"
-        Write-Styled -Type Step -Message "[2] Cambiar Extensiones Objetivo"
-        Write-Styled -Type Info -Message "    Actual: $($global:CodeQualityConfig.TargetExtensions -join ', ')"
-        Write-Styled -Type Step -Message "[3] Cambiar Formato de Fin de Línea (Actual: $($global:CodeQualityConfig.LineEnding))"
+        Write-PhoenixStyledOutput -Type Step -Message "[1] Cambiar Directorio Objetivo"
+        Write-PhoenixStyledOutput -Type Info -Message "    Actual: $($global:CodeQualityConfig.TargetDirectory)"
+        Write-PhoenixStyledOutput -Type Step -Message "[2] Cambiar Extensiones Objetivo"
+        Write-PhoenixStyledOutput -Type Info -Message "    Actual: $($global:CodeQualityConfig.TargetExtensions -join ', ')"
+        Write-PhoenixStyledOutput -Type Step -Message "[3] Cambiar Formato de Fin de Línea (Actual: $($global:CodeQualityConfig.LineEnding))"
 
         # Opciones de Activación/Desactivación
         $rules = $global:CodeQualityConfig.Rules.GetEnumerator() | Sort-Object Name
         for ($i = 0; $i -lt $rules.Count; $i++) {
             $rule = $rules[$i]
             $status = if ($rule.Value) { "[ACTIVADO]" } else { "[DESACTIVADO]" }
-            Write-Styled -Type Step -Message "[$($i + 4)] Activar/Desactivar $($rule.Name) $status"
+            Write-PhoenixStyledOutput -Type Step -Message "[$($i + 4)] Activar/Desactivar $($rule.Name) $status"
         }
 
-        Write-Styled -Type Step -Message "[0] Guardar y Volver"
+        Write-PhoenixStyledOutput -Type Step -Message "[0] Guardar y Volver"
 
         $validChoices = 0..($rules.Count + 3)
-        $choice = Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage "Seleccione una opción para modificar"
+        $choice = Request-MenuSelection -ValidChoices $validChoices -PromptMessage "Seleccione una opción para modificar"
 
         switch ($choice) {
             '0' { $exitMenu = $true; continue }
@@ -216,21 +216,21 @@ function _Configure-Sanitization-Rules {
                 $newDir = Read-Host "  -> Introduzca la nueva ruta del directorio objetivo"
                 if (Test-Path $newDir -PathType Container) {
                     $global:CodeQualityConfig.TargetDirectory = $newDir
-                    Write-Styled -Type Success -Message "Directorio actualizado."
+                    Write-PhoenixStyledOutput -Type Success -Message "Directorio actualizado."
                 } else {
-                    Write-Styled -Type Error -Message "La ruta proporcionada no es un directorio válido."
+                    Write-PhoenixStyledOutput -Type Error -Message "La ruta proporcionada no es un directorio válido."
                 }
                 Start-Sleep -Seconds 1
             }
             '2' {
                 $newExts = Read-Host "  -> Introduzca las nuevas extensiones separadas por comas (ej: *.txt,*.log)"
                 $global:CodeQualityConfig.TargetExtensions = $newExts -split ',' | ForEach-Object { $_.Trim() }
-                Write-Styled -Type Success -Message "Extensiones actualizadas."
+                Write-PhoenixStyledOutput -Type Success -Message "Extensiones actualizadas."
                 Start-Sleep -Seconds 1
             }
             '3' {
                 $global:CodeQualityConfig.LineEnding = if ($global:CodeQualityConfig.LineEnding -eq 'CRLF') { 'LF' } else { 'CRLF' }
-                Write-Styled -Type Success -Message "Formato de fin de línea cambiado a $($global:CodeQualityConfig.LineEnding)."
+                Write-PhoenixStyledOutput -Type Success -Message "Formato de fin de línea cambiado a $($global:CodeQualityConfig.LineEnding)."
                 Start-Sleep -Seconds 1
             }
             default {
@@ -242,55 +242,55 @@ function _Configure-Sanitization-Rules {
     }
 }
 
-function _Run-Sanitization-Process {
-    $filesToFix = _Analyze-Directory -Config $global:CodeQualityConfig
+function Start-CodeQualityAnalysisAndFix {
+    $filesToFix = Get-CodeQualityIssue -Config $global:CodeQualityConfig
 
     if ($null -eq $filesToFix) { # Caso de no encontrar ficheros
-        Pause-And-Return
+        Request-Continuation
         return
     }
 
     if ($filesToFix.Count -eq 0) {
-        Write-Styled -Type Success -Message "¡Análisis completo! Todos los ficheros cumplen con los estándares configurados."
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Success -Message "¡Análisis completo! Todos los ficheros cumplen con los estándares configurados."
+        Request-Continuation
         return
     }
 
-    Show-Header -Title "Análisis Completado"
-    Write-Styled -Type Warn -Message "Se encontraron $($filesToFix.Count) fichero(s) que necesitan ser saneados:"
-    $filesToFix | ForEach-Object { Write-Styled -Type Info -Message "  - $($_.Path) ($($_.Reason))" }
+    Show-PhoenixHeader -Title "Análisis Completado"
+    Write-PhoenixStyledOutput -Type Warn -Message "Se encontraron $($filesToFix.Count) fichero(s) que necesitan ser saneados:"
+    $filesToFix | ForEach-Object { Write-PhoenixStyledOutput -Type Info -Message "  - $($_.Path) ($($_.Reason))" }
     Write-Host
 
-    $consent = Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage "El script aplicará las correcciones configuradas. ¿Desea proceder? (S/N)"
+    $consent = Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "El script aplicará las correcciones configuradas. ¿Desea proceder? (S/N)"
     if ($consent -ne 'S') {
-        Write-Styled -Type Error -Message "Operación cancelada por el usuario."
-        Pause-And-Return
+        Write-PhoenixStyledOutput -Type Error -Message "Operación cancelada por el usuario."
+        Request-Continuation
         return
     }
 
-    _Execute-Sanitization -FilesToProcess $filesToFix -Config $global:CodeQualityConfig
-    Pause-And-Return
+    Start-CodeQualitySanitization -FilesToProcess $filesToFix -Config $global:CodeQualityConfig
+    Request-Continuation
 }
 #endregion
 
 #region Punto de Entrada Principal de la Fase
-function Invoke-Phase6_CodeQuality {
+function Invoke-CodeQualityPhase {
     $exitMenu = $false
     while (-not $exitMenu) {
-        Show-Header -Title "FASE 6: Saneamiento y Calidad del Código"
+        Show-PhoenixHeader -Title "FASE 6: Saneamiento y Calidad del Código"
         $menuOptions = @(
-            @{ Description = "Analizar y Sanear Directorio"; Action = { _Run-Sanitization-Process } },
-            @{ Description = "Configurar Reglas de Saneamiento"; Action = { _Configure-Sanitization-Rules } },
-            @{ Description = "Ver Configuración Actual"; Action = { _Show-Current-Configuration; Pause-And-Return } }
+            @{ Description = "Analizar y Sanear Directorio"; Action = { Start-CodeQualityAnalysisAndFix } },
+            @{ Description = "Configurar Reglas de Saneamiento"; Action = { Show-CodeQualityRuleMenu } },
+            @{ Description = "Ver Configuración Actual"; Action = { Show-CodeQualityConfiguration; Request-Continuation } }
         )
 
         for ($i = 0; $i -lt $menuOptions.Count; $i++) {
-            Write-Styled -Type Step -Message "[$($i+1)] $($menuOptions[$i].Description)"
+            Write-PhoenixStyledOutput -Type Step -Message "[$($i+1)] $($menuOptions[$i].Description)"
         }
-        Write-Styled -Type Step -Message "[0] Volver al Menú Principal"
+        Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
         Write-Host
 
-        $choice = Invoke-MenuPrompt -ValidChoices @('1', '2', '3', '0')
+        $choice = Request-MenuSelection -ValidChoices @('1', '2', '3', '0')
 
         switch ($choice) {
             '0' { $exitMenu = $true }
