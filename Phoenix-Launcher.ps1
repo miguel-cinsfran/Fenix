@@ -101,7 +101,7 @@ if ($consent -ne 'S') {
 $mainMenuOptions = @(
     @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-OneDrivePhase; Request-Continuation } },
     @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-SoftwareMenuPhase -CatalogPath $catalogsPath } },
-    @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-TweaksPhase -CatalogPath $tweaksCatalog; Request-Continuation } },
+    @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-TweaksPhase -CatalogPath $tweaksCatalog } },
     @{ Description = "Ejecutar FASE 4: Instalación de WSL2"; Action = { Invoke-WslPhase } },
     @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-CleanupPhase -CatalogPath $cleanupCatalog } },
     @{ Description = "Ejecutar FASE 6: Saneamiento y Calidad del Código"; Action = { Invoke-CodeQualityPhase } },

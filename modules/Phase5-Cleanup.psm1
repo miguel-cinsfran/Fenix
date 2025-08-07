@@ -68,11 +68,15 @@ function _Invoke-CleanupTask-AnalyzeProcesses {
     $cpuFormat = @{Name="CPU (s)"; Expression={$_.CPUTime.ToString('F2')}}
     $memFormat = @{Name="Memoria (MB)"; Expression={($_.Memory / 1MB).ToString('F2')}}
 
-    Write-PhoenixStyledOutput -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de CPU:"
-    $processList | Sort-Object -Property CPUTime -Descending | Select-Object -First $Task.details.count | Format-Table Name, Id, $cpuFormat, $memFormat -AutoSize
+    # Capturar la salida de la tabla para darle un estilo consistente.
+    $cpuTable = $processList | Sort-Object -Property CPUTime -Descending | Select-Object -First $Task.details.count | Format-Table Name, Id, $cpuFormat, $memFormat -AutoSize | Out-String
+    $memTable = $processList | Sort-Object -Property Memory -Descending | Select-Object -First $Task.details.count | Format-Table Name, Id, $cpuFormat, $memFormat -AutoSize | Out-String
 
-    Write-PhoenixStyledOutput -Type SubStep -Message "Top $($Task.details.count) procesos por consumo de Memoria (MB):"
-    $processList | Sort-Object -Property Memory -Descending | Select-Object -First $Task.details.count | Format-Table Name, Id, $cpuFormat, $memFormat -AutoSize
+    Show-PhoenixHeader -Title "Top $($Task.details.count) procesos por consumo de CPU" -NoClear
+    Write-Host $cpuTable -ForegroundColor $Global:Theme.Info
+
+    Show-PhoenixHeader -Title "Top $($Task.details.count) procesos por consumo de Memoria (MB)" -NoClear
+    Write-Host $memTable -ForegroundColor $Global:Theme.Info
 }
 
 function _Invoke-CleanupTask-SetDNS {
@@ -206,7 +210,13 @@ function Invoke-CleanupPhase {
             }
         }
 
-        if ($actionTaken) { Request-Continuation }
+        if ($actionTaken) {
+            # Pausar solo para tareas que no son instantáneas y muestran mucha información.
+            $pauseTasks = @("FindLargeFiles", "AnalyzeProcesses")
+            if ($selectedTask.type -in $pauseTasks) {
+                Request-Continuation
+            }
+        }
     }
 }
 

@@ -264,7 +264,7 @@ function Start-CodeQualityAnalysisAndFix {
     $consent = Request-MenuSelection -ValidChoices @('S', 'N') -PromptMessage "El script aplicará las correcciones configuradas. ¿Desea proceder? (S/N)"
     if ($consent -ne 'S') {
         Write-PhoenixStyledOutput -Type Error -Message "Operación cancelada por el usuario."
-        Request-Continuation
+        Start-Sleep -Seconds 2 # Pausa breve para leer el mensaje antes de volver al menú.
         return
     }
 

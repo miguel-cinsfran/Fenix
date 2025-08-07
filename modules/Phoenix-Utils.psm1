@@ -28,13 +28,25 @@ function Show-PhoenixHeader {
     if (-not $NoClear) { Clear-Host }
 
     $titleColor = if ($Global:Theme.Title) { $Global:Theme.Title } else { "Cyan" }
-    $subtleColor = if ($Global:Theme.Subtle) { $Global:Theme.Subtle } else { "DarkGray" }
+    $borderColor = if ($Global:Theme.Subtle) { $Global:Theme.Subtle } else { "DarkGray" }
+    $width = 80
 
-    $separator = "================================================================================"
+    $topBorder = "╔" + ("═" * ($width - 2)) + "╗"
+    $bottomBorder = "╚" + ("═" * ($width - 2)) + "╝"
+
+    # Manejar títulos más largos que el ancho del cuadro
+    $trimmedTitle = $TitleText
+    if ($trimmedTitle.Length -gt ($width - 4)) {
+        $trimmedTitle = $trimmedTitle.Substring(0, $width - 7) + "..."
+    }
+
+    $padding = $width - 4 - $trimmedTitle.Length
+    $titleLine = "║ $($trimmedTitle)" + (' ' * $padding) + " ║"
 
     Write-Host
-    Write-Host $TitleText -ForegroundColor $titleColor
-    Write-Host $separator -ForegroundColor $subtleColor
+    Write-Host $topBorder -ForegroundColor $borderColor
+    Write-Host $titleLine -ForegroundColor $titleColor
+    Write-Host $bottomBorder -ForegroundColor $borderColor
     Write-Host
 }
 
@@ -311,6 +323,22 @@ function Invoke-NativeCommandWithOutputCapture {
     $jobResult = Start-JobWithTimeout -ScriptBlock $scriptBlock -Activity $Activity -IdleTimeoutEnabled $IdleTimeoutEnabled -ProgressRegex $ProgressRegex
 
     $outputString = $jobResult.Output -join "`n"
+
+    # WSL en sistemas Windows a menudo emite en UTF-16LE, que puede ser mal interpretado por el host de PowerShell.
+    # Esto se manifiesta como caracteres NUL ('`0') intercalados en la cadena de salida.
+    # Esta sección detecta y corrige este problema específico sin alterar la infraestructura del job.
+    if ($Executable -like "*wsl.exe" -and $outputString -like "*`0*") {
+        try {
+            Write-PhoenixStyledOutput -Type Log -Message "Detectada posible salida UTF-16 mal codificada de WSL. Intentando corregir."
+            $charArray = $outputString.ToCharArray()
+            $byteArray = $charArray | ForEach-Object { [byte]$_ }
+            # Se usa [System.Text.Encoding]::Unicode, que en Windows es UTF-16LE, para decodificar el array de bytes.
+            # Se eliminan los BOM (Byte Order Marks) que puedan aparecer al principio.
+            $outputString = [System.Text.Encoding]::Unicode.GetString($byteArray).Trim([char]0xFEFF, [char]0xFFFE)
+        } catch {
+            Write-PhoenixStyledOutput -Type Warn -Message "Falló el intento de corregir la codificación de WSL. Se usará la salida original."
+        }
+    }
 
     $result = [PSCustomObject]@{
         Success = $jobResult.Success

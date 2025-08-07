@@ -243,7 +243,7 @@ function Invoke-TweaksPhase {
                 foreach($item in $items) { Invoke-TweakAction -Action "Apply" -Tweak $item.Tweak }
                 $actionTaken = $true
             }
-            if ($actionTaken) { Request-Continuation; continue }
+            if ($actionTaken) { continue }
         }
         if ($choices -contains 'D') {
             $items = $tweakStatusList | Where-Object { $_.Status -eq 'Aplicado' }
@@ -254,7 +254,7 @@ function Invoke-TweaksPhase {
                     $actionTaken = $true
                  }
             }
-            if ($actionTaken) { Request-Continuation; continue }
+            if ($actionTaken) { continue }
         }
 
         # Procesar selecciones numéricas
@@ -281,7 +281,11 @@ function Invoke-TweaksPhase {
                 }
             }
         }
-        if ($actionTaken) { Request-Continuation }
+
+        if ($actionTaken) {
+            # No es necesario hacer nada aquí. El bucle se reiniciará automáticamente,
+            # refrescando la lista de estados y proporcionando una experiencia más fluida.
+        }
     }
 }
 

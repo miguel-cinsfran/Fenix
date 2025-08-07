@@ -73,25 +73,25 @@ function Invoke-AuditPhase {
         $reportPath = Join-Path $PSScriptRoot "..\\logs\\$reportName"
 
         # --- Cabecera del Informe ---
-        $report.AppendLine("# Informe de Auditoría del Sistema - Fénix")
-        $report.AppendLine("Generado el: $(Get-Date)")
-        $report.AppendLine("---")
+        [void]$report.AppendLine("# Informe de Auditoría del Sistema - Fénix")
+        [void]$report.AppendLine("Generado el: $(Get-Date)")
+        [void]$report.AppendLine("---")
 
         # --- Recolección de Software Instalado ---
-        $report.AppendLine("## Software Instalado")
+        [void]$report.AppendLine("## Software Instalado")
 
         # Chocolatey
         Write-PhoenixStyledOutput -Type SubStep -Message "Recolectando paquetes de Chocolatey..."
         $chocoPackages = & choco list --limit-output --local-only 2>$null | ForEach-Object { $parts = $_ -split '\|'; if ($parts.Length -eq 2) { [PSCustomObject]@{ Name = $parts[0]; Version = $parts[1] } } }
-        $report.AppendLine("### Chocolatey")
+        [void]$report.AppendLine("### Chocolatey")
         if ($chocoPackages) {
-            $report.AppendLine("| Paquete | Versión |")
-            $report.AppendLine("|---|---|")
-            $chocoPackages | ForEach-Object { $report.AppendLine("| $($_.Name) | $($_.Version) |") }
+            [void]$report.AppendLine("| Paquete | Versión |")
+            [void]$report.AppendLine("|---|---|")
+            $chocoPackages | ForEach-Object { [void]$report.AppendLine("| $($_.Name) | $($_.Version) |") }
         } else {
-            $report.AppendLine("No se encontraron paquetes de Chocolatey.")
+            [void]$report.AppendLine("No se encontraron paquetes de Chocolatey.")
         }
-        $report.AppendLine()
+        [void]$report.AppendLine()
 
         # Winget
         Write-PhoenixStyledOutput -Type SubStep -Message "Recolectando paquetes de Winget..."
@@ -104,28 +104,28 @@ function Invoke-AuditPhase {
                 if ($parts.Count -ge 2) { [PSCustomObject]@{ Name = $parts[0..($parts.Count-2)] -join ' '; Version = $parts[-1] } }
             }
         }
-        $report.AppendLine("### Winget")
+        [void]$report.AppendLine("### Winget")
         if ($wingetPackages) {
-            $report.AppendLine("| Paquete | Versión |")
-            $report.AppendLine("|---|---|")
-            $wingetPackages | ForEach-Object { $report.AppendLine("| $($_.Name) | $($_.Version) |") }
+            [void]$report.AppendLine("| Paquete | Versión |")
+            [void]$report.AppendLine("|---|---|")
+            $wingetPackages | ForEach-Object { [void]$report.AppendLine("| $($_.Name) | $($_.Version) |") }
         } else {
-            $report.AppendLine("No se encontraron paquetes de Winget.")
+            [void]$report.AppendLine("No se encontraron paquetes de Winget.")
         }
-        $report.AppendLine()
+        [void]$report.AppendLine()
 
         # --- Recolección de Ajustes Aplicados (Tweaks) ---
         Write-PhoenixStyledOutput -Type SubStep -Message "Recolectando ajustes del sistema aplicados..."
         $appliedTweaks = Get-AppliedSystemTweak
-        $report.AppendLine("## Ajustes del Sistema Aplicados")
+        [void]$report.AppendLine("## Ajustes del Sistema Aplicados")
         if ($appliedTweaks.Count -gt 0) {
-            $report.AppendLine("| Descripción del Ajuste |")
-            $report.AppendLine("|---|")
-            $appliedTweaks | ForEach-Object { $report.AppendLine("| $($_.description) |") }
+            [void]$report.AppendLine("| Descripción del Ajuste |")
+            [void]$report.AppendLine("|---|")
+            $appliedTweaks | ForEach-Object { [void]$report.AppendLine("| $($_.description) |") }
         } else {
-            $report.AppendLine("No se encontraron ajustes aplicados.")
+            [void]$report.AppendLine("No se encontraron ajustes aplicados.")
         }
-        $report.AppendLine()
+        [void]$report.AppendLine()
 
         # --- Guardar el Informe ---
         Out-File -FilePath $reportPath -InputObject $report.ToString() -Encoding utf8
