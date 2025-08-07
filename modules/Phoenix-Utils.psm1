@@ -190,10 +190,6 @@ function Request-MenuSelection {
             if ($invalidChoices.Count -gt 0) {
                 Write-PhoenixStyledOutput -Type Error -Message "Opciones no válidas: $($invalidChoices -join ', ')"; Start-Sleep -s 1; Write-Host
             } else {
-                if (-not $AllowMultipleSelections -and $finalChoices.Count -gt 1) {
-                    # Si no se permiten múltiples selecciones, devolver solo la primera válida.
-                    return $finalChoices[0]
-                }
                 return $finalChoices.ToArray()
             }
         }
