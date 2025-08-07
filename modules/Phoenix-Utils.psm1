@@ -87,7 +87,8 @@ function Show-PhoenixStandardMenu {
     Write-Host
 
     # Display action options (letter choices)
-    $validChoices = @() + (1..$MenuItems.Count)
+    $numericChoices = 1..$MenuItems.Count | ForEach-Object { "$_" }
+    $validChoices = @($numericChoices)
     foreach ($key in $ActionOptions.Keys) {
         Write-PhoenixStyledOutput -Type Consent -Message "-> [$key] $($ActionOptions[$key])"
         $validChoices += $key

@@ -559,7 +559,8 @@ function Invoke-WslPhase {
             Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
             Write-Host
 
-            $validChoices = 1..($menuOptions.Count) + '0'
+            $numericChoices = 1..$menuOptions.Count | ForEach-Object { "$_" }
+            $validChoices = @($numericChoices) + @('0')
             $choice = (Request-MenuSelection -ValidChoices $validChoices -PromptMessage "Seleccione una tarea" -AllowMultipleSelections:$false)[0]
 
             if ($choice -eq '0') { return }

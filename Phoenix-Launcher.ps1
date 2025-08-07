@@ -130,7 +130,7 @@ try {
         Show-MainMenu -menuOptions $mainMenuOptions -NoClear:(-not $firstRun)
         $firstRun = $false
 
-        $numericChoices = 1..$mainMenuOptions.Count
+        $numericChoices = 1..$mainMenuOptions.Count | ForEach-Object { "$_" }
         $validChoices = @($numericChoices) + @('R', '0')
         $choices = Request-MenuSelection -ValidChoices $validChoices -AllowMultipleSelections:$false
         if ($choices.Count -eq 0) { continue }

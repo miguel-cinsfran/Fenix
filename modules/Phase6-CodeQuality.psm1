@@ -207,8 +207,8 @@ function Show-CodeQualityRuleMenu {
 
         Write-PhoenixStyledOutput -Type Step -Message "[0] Guardar y Volver"
 
-        $validChoices = 0..($rules.Count + 3)
-        $choice = (Request-MenuSelection -ValidChoices $validChoices -PromptMessage "Seleccione una opción para modificar" -AllowMultipleSelections:$false)[0]
+        $numericChoices = 0..($rules.Count + 3) | ForEach-Object { "$_" }
+        $choice = (Request-MenuSelection -ValidChoices $numericChoices -PromptMessage "Seleccione una opción para modificar" -AllowMultipleSelections:$false)[0]
 
         switch ($choice) {
             '0' { $exitMenu = $true; continue }
