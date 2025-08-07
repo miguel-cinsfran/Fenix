@@ -285,4 +285,4 @@ function Invoke-TweaksPhase {
     }
 }
 
-Export-ModuleMember -Function *
+Export-ModuleMember -Function Invoke-TweaksPhase

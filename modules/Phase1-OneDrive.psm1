@@ -189,4 +189,6 @@ function Invoke-OneDrivePhase {
     }
 }
 
-Export-ModuleMember -Function *
+# Exportar únicamente las funciones destinadas al consumo público para evitar la
+# exposición de helpers internos y cumplir con las mejores prácticas de modularización.
+Export-ModuleMember -Function Invoke-OneDrivePhase
