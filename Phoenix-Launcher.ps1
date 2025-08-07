@@ -88,7 +88,7 @@ Write-Host
 Write-Styled -Type Warn -Message "ADVERTENCIA: Ejecute este script bajo su propio riesgo. Asegúrese de entender lo que hace cada fase."
 Write-Host
 
-$consent = Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage "¿Acepta los riesgos y desea continuar? (S/N)"
+$consent = (Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage "¿Acepta los riesgos y desea continuar? (S/N)")[0]
 if ($consent -ne 'S') {
     Write-Styled -Type Error -Message "Consentimiento no otorgado. El script se cerrará."
     Start-Sleep -Seconds 2
