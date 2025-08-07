@@ -25,13 +25,17 @@ function Show-Header {
         [string]$TitleText,
         [switch]$NoClear
     )
-    $underline = "$([char]27)[4m"; $reset = "$([char]27)[0m"
     if (-not $NoClear) { Clear-Host }
 
     $titleColor = if ($Global:Theme.Title) { $Global:Theme.Title } else { "Cyan" }
     $subtleColor = if ($Global:Theme.Subtle) { $Global:Theme.Subtle } else { "DarkGray" }
 
-    Write-Host; Write-Host "$underline$TitleText$reset" -ForegroundColor $titleColor; Write-Host "---" -ForegroundColor $subtleColor; Write-Host
+    $separator = "================================================================================"
+
+    Write-Host
+    Write-Host $TitleText -ForegroundColor $titleColor
+    Write-Host $separator -ForegroundColor $subtleColor
+    Write-Host
 }
 
 function Write-Styled {
@@ -116,6 +120,11 @@ function Invoke-MenuPrompt {
         while ($true) {
             $input = (Read-Host -Prompt "  -> $PromptMessage (se permiten múltiples, ej: 1,3,5-8)").Trim().ToUpper()
             if ([string]::IsNullOrWhiteSpace($input)) { continue }
+
+            # Alias Q -> S si S es una opción válida, para consistencia con el menú principal.
+            if ($input -eq 'Q' -and $ValidChoices -contains 'S') {
+                $input = 'S'
+            }
 
             $expandedChoices = [System.Collections.Generic.List[string]]::new()
             $validInput = $true
@@ -323,6 +332,26 @@ function Invoke-NativeCommand {
     }
 
     return $result
+}
+
+function Test-JsonIsValid {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [string]$Path
+    )
+
+    process {
+        try {
+            Get-Content -Path $Path -Raw | ConvertFrom-Json -ErrorAction Stop | Out-Null
+            return $true
+        } catch {
+            # This is not a fatal error, the calling function will handle the false return.
+            # We log it here for better debuggability.
+            Write-Styled -Type Log -Message "El fichero JSON en '$Path' no es válido. Error: $($_.Exception.Message)"
+            return $false
+        }
+    }
 }
 
 function Test-SoftwareCatalog {

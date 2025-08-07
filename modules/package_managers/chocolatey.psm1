@@ -57,14 +57,14 @@ function Get-PackageStatus {
         $installId = $Package.installId
         $status = "No Instalado"; $versionInfo = ""; $isUpgradable = $false
 
-        if ($using:outdatedPackages.ContainsKey($installId)) {
+        if ($outdatedPackages.ContainsKey($installId)) {
             $status = "Actualización Disponible"
-            $versionInfo = "(v$($using:outdatedPackages[$installId].Current) -> v$($using:outdatedPackages[$installId].Available))"
+            $versionInfo = "(v$($outdatedPackages[$installId].Current) -> v$($outdatedPackages[$installId].Available))"
             $isUpgradable = $true
         }
-        elseif ($using:installedPackages.ContainsKey($installId)) {
+        elseif ($installedPackages.ContainsKey($installId)) {
             $status = "Instalado"
-            $versionInfo = "(v$($using:installedPackages[$installId]))"
+            $versionInfo = "(v$($installedPackages[$installId]))"
         }
         return @{ Status = $status; VersionInfo = $versionInfo; IsUpgradable = $isUpgradable }
     }

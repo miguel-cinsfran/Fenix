@@ -139,13 +139,8 @@ function Invoke-Phase5_Cleanup {
         $catalogContent = Get-Content -Raw -Path $CatalogPath -Encoding UTF8
         $catalogJson = $catalogContent | ConvertFrom-Json
 
-        if ($catalogJson.'$schema') {
-            $catalogDir = Split-Path -Path $CatalogPath -Parent
-            $schemaPath = Join-Path -Path $catalogDir -ChildPath $catalogJson.'$schema'
-            if (-not (Test-Json -Path $CatalogPath -SchemaPath $schemaPath)) {
-                throw "El fichero de catálogo '$((Split-Path $CatalogPath -Leaf))' no cumple con su esquema: $($_.Exception.Message)"
-            }
-            Write-Styled -Type Success -Message "El catálogo '$((Split-Path $CatalogPath -Leaf))' fue validado con éxito."
+        if (-not (Test-JsonIsValid -Path $CatalogPath)) {
+            throw "El fichero de catálogo '$((Split-Path $CatalogPath -Leaf))' contiene JSON inválido."
         }
         $tasks = $catalogJson.items
     } catch {

@@ -200,7 +200,9 @@ function Show-InstalledDistrosMenu {
         $lines = $listResult.Output -split '\r?\n' | Select-Object -Skip 1
         $distros = foreach ($line in $lines) {
             if ($line.Trim()) {
-                $match = $line -match '^\s?(\*?)\s*(.+?)\s{2,}(.+?)\s{2,}(.+?)\s*$'
+                # Regex más robusta que usa \S+ (cualquier cosa que no sea un espacio) para Estado y Versión.
+                # Esto evita que el campo Nombre (que puede contener espacios) capture texto de más.
+                $match = $line -match '^\s?(\*?)\s*(.+?)\s{2,}(\S+)\s{2,}(\S+)\s*$'
                 if ($match) {
                      [PSCustomObject]@{
                         IsDefault = $matches[1] -eq '*'
@@ -497,15 +499,18 @@ function Invoke-Phase4_WSL {
                 "S" = "Salir"
             }
 
-            $choice = Invoke-StandardMenu -Title "Menú Principal de WSL" -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una tarea"
+            $choices = Invoke-StandardMenu -Title "Menú Principal de WSL" -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una tarea"
+            if ($choices.Count -eq 0) { continue }
 
-            switch ($choice) {
-                "1" { Invoke-WslUpdateCheck }
-                "2" { Show-InstalledDistrosMenu }
-                "3" { Show-AvailableDistros }
-                "4" { Manage-WslFeatures }
-                "5" { Invoke-WslUninstall }
-                "S" { Write-Styled -Type Info -Message "Saliendo del menú de WSL."; return }
+            foreach ($choice in $choices) {
+                switch ($choice) {
+                    "1" { Invoke-WslUpdateCheck }
+                    "2" { Show-InstalledDistrosMenu }
+                    "3" { Show-AvailableDistros }
+                    "4" { Manage-WslFeatures }
+                    "5" { Invoke-WslUninstall }
+                    "S" { Write-Styled -Type Info -Message "Saliendo del menú de WSL."; return }
+                }
             }
         }
     } catch {

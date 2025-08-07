@@ -146,26 +146,13 @@ function Invoke-SoftwareManagerUI {
         $catalogContent = Get-Content -Raw -Path $CatalogFile -Encoding UTF8
         $catalogJson = $catalogContent | ConvertFrom-Json
 
-        if ($null -eq $catalogJson.'$schema') {
-            Write-Styled -Type Warn -Message "El catálogo '$CatalogFile' no especifica un '$schema'. Se omitirá la validación."
-        } else {
-            $catalogDir = Split-Path -Path $CatalogFile -Parent
-            $schemaPath = Join-Path -Path $catalogDir -ChildPath $catalogJson.'$schema'
-
-            if (-not (Test-Path $schemaPath)) {
-                Write-Styled -Type Error -Message "No se encontró el fichero de esquema '$schemaPath' definido en '$CatalogFile'."
-                Pause-And-Return; return
-            }
-
-            if (-not (Test-Json -Path $CatalogFile -SchemaPath $schemaPath)) {
-                Write-Styled -Type Error -Message "El fichero de catálogo '$CatalogFile' no cumple con su esquema."
-                Write-Styled -Type Log -Message "Error de validación: $($_.Exception.Message)"
-                Pause-And-Return; return
-            }
-            Write-Styled -Type Success -Message "El catálogo '$((Split-Path $CatalogFile -Leaf))' fue validado con éxito."
+        # Validar que el JSON es sintácticamente correcto.
+        if (-not (Test-JsonIsValid -Path $CatalogFile)) {
+            Write-Styled -Type Error -Message "El fichero de catálogo '$CatalogFile' contiene JSON inválido."
+            Pause-And-Return; return
         }
 
-        # La validación manual sigue siendo útil para semántica que JSON Schema no puede cubrir.
+        # La validación de la estructura del catálogo es crucial.
         if (-not (Test-SoftwareCatalog -CatalogData $catalogJson -CatalogFileName (Split-Path $CatalogFile -Leaf))) {
             Pause-And-Return; return
         }

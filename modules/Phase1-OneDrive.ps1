@@ -105,9 +105,11 @@ function Invoke-Phase1_OneDrive {
             foreach ($path in $uninstallersFound) {
                 Write-Styled -Type SubStep -Message "Iniciando desinstalador: $path"
                 try {
-                    $result = Invoke-NativeCommand -Executable $path -ArgumentList "/uninstall /silent /quiet" -Activity "Desinstalando OneDrive" -IdleTimeoutEnabled $false
-                    if (-not $result.Success) {
-                        Write-Styled -Type Warn -Message "El desinstalador en '$path' finalizó con un error o advertencia."
+                    $process = Start-Process -FilePath $path -ArgumentList "/uninstall /silent /quiet" -Wait -PassThru -ErrorAction Stop
+                    if ($process.ExitCode -ne 0) {
+                        Write-Styled -Type Warn -Message "El desinstalador en '$path' finalizó con el código de salida: $($process.ExitCode)."
+                    } else {
+                        Write-Styled -Type SubStep -Message "El desinstalador en '$path' se ejecutó correctamente."
                     }
                 } catch {
                     Write-Styled -Type Error -Message "Falló el lanzamiento del desinstalador en '$path': $($_.Exception.Message)"
