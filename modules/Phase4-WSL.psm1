@@ -12,6 +12,52 @@
 #>
 
 #region Internal Functions
+function Invoke-WslCommand {
+    [CmdletBinding()]
+    param(
+        [string]$ArgumentList
+    )
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "wsl.exe"
+    $psi.Arguments = $ArgumentList
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::Unicode
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::Unicode
+
+    try {
+        # Usar Write-Progress para dar feedback en comandos largos
+        Write-Progress -Activity "Ejecutando WSL" -Status "wsl.exe $ArgumentList" -PercentComplete 50
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $output = $process.StandardOutput.ReadToEnd()
+        $error = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+
+        $success = ($process.ExitCode -eq 0)
+        # Combinar la salida de error con la salida estándar si hay un error
+        if (-not $success -and -not [string]::IsNullOrWhiteSpace($error)) {
+            $output += "`n[ERROR DE WSL]:`n$error"
+        }
+        Write-Progress -Activity "Ejecutando WSL" -Completed
+
+        return [PSCustomObject]@{
+            Success = $success
+            Output = $output.Trim()
+            ExitCode = $process.ExitCode
+        }
+    } catch {
+        Write-Progress -Activity "Ejecutando WSL" -Completed
+        return [PSCustomObject]@{
+            Success = $false
+            Output = "No se pudo iniciar el proceso wsl.exe: $($_.Exception.Message)"
+            ExitCode = -1
+        }
+    }
+}
+
 function Enable-WindowsOptionalFeature {
     param([string]$FeatureName)
     Write-PhoenixStyledOutput -Type SubStep -Message "Habilitando la característica de Windows: '$FeatureName'..."
@@ -24,9 +70,9 @@ function Enable-WindowsOptionalFeature {
 
 function Test-WslInstallation {
     Write-PhoenixStyledOutput -Type Step -Message "Verificando el estado actual de WSL..."
-    $statusResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--status" -FailureStrings "no está instalado" -Activity "Verificando estado de WSL"
+    $statusResult = Invoke-WslCommand -ArgumentList "--status"
 
-    if (-not $statusResult.Success) {
+    if (-not $statusResult.Success -or $statusResult.Output -match "no está instalado") {
         Write-PhoenixStyledOutput -Type Warn -Message "WSL no está instalado o no es funcional."
         Write-PhoenixStyledOutput -Type Step -Message "Verificando prerrequisitos de Windows (VirtualMachinePlatform y Subsystem-Linux)..."
 
@@ -54,7 +100,7 @@ function Test-WslInstallation {
 
         Write-PhoenixStyledOutput -Type Success -Message "Todos los prerrequisitos de Windows ya están habilitados."
         Write-PhoenixStyledOutput -Type Step -Message "Procediendo con la instalación de WSL..."
-        $installResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--install" -FailureStrings "Error" -Activity "Instalando WSL" -IdleTimeoutEnabled:$false -ProgressRegex '\s(\d+)\s*%'
+        $installResult = Invoke-WslCommand -ArgumentList "--install"
         if (-not $installResult.Success) {
             throw "La instalación de WSL falló. Salida: $($installResult.Output)"
         }
@@ -84,7 +130,7 @@ function Disable-WindowsOptionalFeature {
 
 function Get-AvailableWslDistro {
     Write-PhoenixStyledOutput -Type SubStep -Message "Consultando la lista de distribuciones disponibles en línea..."
-    $onlineResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--list --online" -Activity "Buscando distribuciones disponibles"
+    $onlineResult = Invoke-WslCommand -ArgumentList "--list --online"
 
     if (-not $onlineResult.Success) {
         Write-PhoenixStyledOutput -Type Error -Message "No se pudo obtener la lista de distribuciones disponibles desde Microsoft Store."
@@ -144,7 +190,7 @@ function Start-WslUpdateCheck {
     Show-PhoenixHeader -Title "Estado y Actualizaciones de WSL" -NoClear
 
     Write-PhoenixStyledOutput -Type Step -Message "Obteniendo el estado actual de WSL..."
-    $statusResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--status" -Activity "Obteniendo estado de WSL"
+    $statusResult = Invoke-WslCommand -ArgumentList "--status"
 
     if ($statusResult.Success) {
         Write-Host $statusResult.Output
@@ -165,7 +211,7 @@ function Start-WslUpdateCheck {
     }
 
     Write-PhoenixStyledOutput -Type Step -Message "Buscando e instalando actualizaciones..."
-    $updateResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--update" -Activity "Actualizando WSL" -IdleTimeoutEnabled:$false
+    $updateResult = Invoke-WslCommand -ArgumentList "--update"
 
     if ($updateResult.Success) {
         Write-PhoenixStyledOutput -Type Success -Message "Proceso de actualización completado."
@@ -182,7 +228,7 @@ function Show-InstalledDistroMenu {
     while ($true) { # Bucle principal para permitir refrescar la lista.
         Show-PhoenixHeader -Title "Administrar Distribuciones Instaladas" -NoClear
 
-        $listResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--list --verbose" -Activity "Listando distribuciones instaladas"
+        $listResult = Invoke-WslCommand -ArgumentList "--list --verbose"
 
         if (-not $listResult.Success) {
             Write-PhoenixStyledOutput -Type Error -Message "No se pudo obtener la lista de distribuciones instaladas."
@@ -198,9 +244,10 @@ function Show-InstalledDistroMenu {
             return
         }
 
-        $lines = $listResult.Output -split '\r?\n' | Select-Object -Skip 1
+        $lines = $listResult.Output -split '\r?\n'
         $distros = foreach ($line in $lines) {
-            if ($line.Trim()) {
+            # Omitir la línea de cabecera y las líneas en blanco para un análisis más robusto.
+            if ($line.Trim() -and $line -notmatch "^\s*NAME\s+STATE\s+VERSION\s*$") {
                 # Regex más robusta que usa \S+ (cualquier cosa que no sea un espacio) para Estado y Versión.
                 # Se usa \s+ en lugar de \s{2,} para ser más tolerante a cambios en el formato de la salida.
                 $match = $line -match '^\s?(\*?)\s*(.+?)\s+(\S+)\s+(\S+)\s*$'
@@ -229,7 +276,7 @@ function Show-InstalledDistroMenu {
         }
 
         $actionOptions = @{ "V" = "Volver al menú principal" }
-        $distroChoice = Show-PhoenixStandardMenu -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una distribución para administrar"
+        $distroChoice = Show-PhoenixStandardMenu -Title "Administrar Distribuciones Instaladas" -MenuItems $menuItems -ActionOptions $actionOptions -PromptMessage "Seleccione una distribución para administrar"
 
         if ($distroChoice -eq 'V') { return }
 
@@ -253,24 +300,20 @@ Seleccione una acción para '$($selectedDistro.Name)':
             '1' { # Desinstalar
                 Write-PhoenixStyledOutput -Type Consent -Message "¡ADVERTENCIA! Esto eliminará permanentemente la distribución '$($selectedDistro.Name)' y todos sus datos."
                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea continuar?") -eq 'S') {
-                    # Se añaden comillas al nombre de la distro para manejar nombres con espacios.
-                    # Se captura el resultado para verificar si la operación tuvo éxito.
-                    $result = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--unregister `"$($selectedDistro.Name)`"" -Activity "Desinstalando $($selectedDistro.Name)"
+                    $result = Invoke-WslCommand -ArgumentList "--unregister `"$($selectedDistro.Name)`""
                     if ($result.Success) {
                         Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' ha sido desinstalada."
                     } else {
                         Write-PhoenixStyledOutput -Type Error -Message "Falló la desinstalación de '$($selectedDistro.Name)'."
                         Write-PhoenixStyledOutput -Type Log -Message "Salida del comando:"
-                        # Mostrar la salida del comando para que el usuario pueda diagnosticar el problema.
                         $result.Output | ForEach-Object { Write-PhoenixStyledOutput -Type Log -Message $_ }
                     }
                     Request-Continuation
-                    break # Romper el switch para forzar un refresco de la lista.
+                    break
                 }
             }
             '2' { # Establecer como predeterminada
-                # Se añaden comillas al nombre de la distro para manejar nombres con espacios.
-                $result = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--set-default `"$($selectedDistro.Name)`"" -Activity "Estableciendo $($selectedDistro.Name) como predeterminada"
+                $result = Invoke-WslCommand -ArgumentList "--set-default `"$($selectedDistro.Name)`""
                 if ($result.Success) {
                     Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.Name)' es ahora la distribución predeterminada."
                 } else {
@@ -284,7 +327,6 @@ Seleccione una acción para '$($selectedDistro.Name)':
                 if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
                     Write-PhoenixStyledOutput -Type Info -Message "Lanzando el proceso de actualización para '$($selectedDistro.Name)'. Siga las instrucciones."
                     try {
-                        # Se añaden comillas al nombre de la distro para el argumento -d.
                         Start-Process wsl -ArgumentList "-d `"$($selectedDistro.Name)`" -- sudo apt-get update && sudo apt-get upgrade -y" -Wait -NoNewWindow
                         Write-PhoenixStyledOutput -Type Success -Message "El proceso de actualización ha finalizado."
                     } catch {
@@ -313,7 +355,7 @@ function Show-AvailableDistroMenu {
     }
 
     # Obtener la lista de distros ya instaladas para filtrarlas.
-    $installedResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones instaladas"
+    $installedResult = Invoke-WslCommand -ArgumentList "--list"
     $installedNames = @()
     if ($installedResult.Success) {
         $installedLines = $installedResult.Output -split '\r?\n' | Select-Object -Skip 1
@@ -348,7 +390,7 @@ function Show-AvailableDistroMenu {
     Write-PhoenixStyledOutput -Type Consent -Message "Se instalará la distribución '$($selectedDistro.FriendlyName)'."
     if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea continuar?") -eq 'S') {
         Write-PhoenixStyledOutput -Type Step -Message "Instalando $($selectedDistro.FriendlyName)... Esto puede tardar varios minutos."
-        $installResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--install -d $($selectedDistro.Name)" -Activity "Instalando $($selectedDistro.Name)" -IdleTimeoutEnabled:$false -ProgressRegex '(\d+)%\s*$'
+        $installResult = Invoke-WslCommand -ArgumentList "--install -d `"$($selectedDistro.Name)`""
 
         if ($installResult.Success) {
             Write-PhoenixStyledOutput -Type Success -Message "'$($selectedDistro.FriendlyName)' se ha instalado correctamente."
@@ -366,7 +408,7 @@ function Show-AvailableDistroMenu {
 function Show-WslFeatureMenu {
     Show-PhoenixHeader -Title "Administrar Características de Windows para WSL" -NoClear
 
-    $wslStatus = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--status" -Activity "Verificando estado de WSL"
+    $wslStatus = Invoke-WslCommand -ArgumentList "--status"
     $isWslInstalled = $wslStatus.Success
 
     $features = @("VirtualMachinePlatform", "Microsoft-Windows-Subsystem-Linux")
@@ -451,7 +493,7 @@ function Start-WslUninstall {
 
     Write-PhoenixStyledOutput -Type Step -Message "Procediendo con la desinstalación de las distribuciones de WSL..."
 
-    $listResult = Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--list" -Activity "Listando distribuciones para desinstalar"
+    $listResult = Invoke-WslCommand -ArgumentList "--list"
     if ($listResult.Success -and $listResult.Output -notmatch "No hay distribuciones instaladas") {
         $lines = $listResult.Output -split '\r?\n' | Select-Object -Skip 1
         $distrosToUninstall = foreach ($line in $lines) {
@@ -462,7 +504,7 @@ function Start-WslUninstall {
 
         foreach ($distro in $distrosToUninstall) {
             Write-PhoenixStyledOutput -Type SubStep -Message "Desregistrando '$distro'..."
-            Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--unregister `"$distro`"" -Activity "Desregistrando $distro"
+            Invoke-WslCommand -ArgumentList "--unregister `"$distro`""
         }
         Write-PhoenixStyledOutput -Type Success -Message "Todas las distribuciones han sido desregistradas."
     } else {
@@ -470,7 +512,7 @@ function Start-WslUninstall {
     }
 
     Write-PhoenixStyledOutput -Type Step -Message "Apagando el subsistema de WSL..."
-    Invoke-NativeCommandWithOutputCapture -Executable "wsl.exe" -ArgumentList "--shutdown" -Activity "Apagando WSL"
+    Invoke-WslCommand -ArgumentList "--shutdown"
 
     Write-PhoenixStyledOutput -Type Success -Message "El proceso de limpieza de distribuciones ha finalizado."
     Write-Host ""
