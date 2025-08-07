@@ -78,7 +78,7 @@ function _Invoke-CleanupTask-AnalyzeProcesses {
 function _Invoke-CleanupTask-SetDNS {
     param($Task)
     Write-Styled -Type Info -Message "Los servidores DNS públicos pueden ofrecer mayor velocidad y privacidad."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?") -ne 'S') {
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea cambiar sus servidores DNS a $($Task.details.name) ($($Task.details.servers -join ', '))?")[0] -ne 'S') {
         Write-Styled -Type Warn -Message "Operación cancelada."
         return
     }
@@ -103,7 +103,7 @@ function _Invoke-CleanupTask-RecycleBinCleanup {
         if ($recycleBin.Items().Count -eq 0) {
             Write-Styled -Type Success -Message "La Papelera de Reciclaje ya está vacía."
         } else {
-            if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea vaciar la papelera permanentemente?") -eq 'S') {
+            if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Confirma que desea vaciar la papelera permanentemente?")[0] -eq 'S') {
                 Clear-RecycleBin -Force -ErrorAction Stop
                 Write-Styled -Type Success -Message "Papelera de Reciclaje vaciada."
             }
@@ -117,7 +117,7 @@ function _Invoke-CleanupTask-WindowsUpdateCleanup {
     param($Task)
     Write-Styled -Type SubStep -Message $Task.description
     Write-Styled -Type Warn -Message "Esta operación puede tardar mucho tiempo."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea proceder con la limpieza profunda?") -eq 'S') {
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Desea proceder con la limpieza profunda?")[0] -eq 'S') {
         $result = Invoke-NativeCommand -Executable "Dism.exe" -ArgumentList "/Online /English /Cleanup-Image /StartComponentCleanup /ResetBase" -FailureStrings "Error:" -Activity "Limpiando archivos de Windows Update"
         if ($result.Success) {
             Write-Styled -Type Success -Message "Tarea '$($Task.description)' completada."
@@ -131,35 +131,51 @@ function _Invoke-CleanupTask-WindowsUpdateCleanup {
 
 function Invoke-Phase5_Cleanup {
     param([string]$CatalogPath)
-    $cleanupCatalogFile = Join-Path $CatalogPath "system_cleanup.json"
-    if (-not (Test-Path $cleanupCatalogFile)) {
-        Write-Styled -Type Error -Message "No se encontró el catálogo de limpieza en '$cleanupCatalogFile'."; Pause-And-Return; return
-    }
 
     try {
-        $tasks = (Get-Content -Raw -Path $cleanupCatalogFile -Encoding UTF8 | ConvertFrom-Json).items
+        if (-not (Test-Path $CatalogPath)) {
+            throw "No se encontró el fichero de catálogo en '$CatalogPath'."
+        }
+        $catalogContent = Get-Content -Raw -Path $CatalogPath -Encoding UTF8
+        $catalogJson = $catalogContent | ConvertFrom-Json
+
+        if ($catalogJson.'$schema') {
+            $catalogDir = Split-Path -Path $CatalogPath -Parent
+            $schemaPath = Join-Path -Path $catalogDir -ChildPath $catalogJson.'$schema'
+            if (-not (Test-Json -Path $CatalogPath -SchemaPath $schemaPath)) {
+                throw "El fichero de catálogo '$((Split-Path $CatalogPath -Leaf))' no cumple con su esquema: $($_.Exception.Message)"
+            }
+            Write-Styled -Type Success -Message "El catálogo '$((Split-Path $CatalogPath -Leaf))' fue validado con éxito."
+        }
+        $tasks = $catalogJson.items
     } catch {
-        Write-Styled -Type Error -Message "Fallo CRÍTICO al procesar '$cleanupCatalogFile'."; Pause-And-Return; return
+        Write-Styled -Type Error -Message "Fallo CRÍTICO al leer o procesar el catálogo de limpieza: $($_.Exception.Message)"
+        Pause-And-Return
+        return
     }
 
     $exitMenu = $false
     while (-not $exitMenu) {
         $menuItems = $tasks | ForEach-Object { [PSCustomObject]@{ Description = $_.description } }
         $actionOptions = [ordered]@{ '0' = 'Volver al Menú Principal.' }
-        $choice = Invoke-StandardMenu -Title "FASE 5: Limpieza y Optimización del Sistema" -MenuItems $menuItems -ActionOptions $actionOptions
+        $choices = Invoke-StandardMenu -Title "FASE 5: Limpieza y Optimización del Sistema" -MenuItems $menuItems -ActionOptions $actionOptions
 
-        if ($choice -eq '0') { $exitMenu = $true; continue }
+        if ($choices -contains '0') { $exitMenu = $true; continue }
 
         $actionTaken = $false
-        $selectedTask = $tasks[[int]$choice - 1]
-        $functionName = "_Invoke-CleanupTask-$($selectedTask.type)"
+        $numericActions = $choices | ForEach-Object { [int]$_ } | Sort-Object
 
-        if (Get-Command $functionName -ErrorAction SilentlyContinue) {
-            & $functionName -Task $selectedTask
-            $actionTaken = $true
-        } else {
-            Write-Styled -Type Error -Message "Tipo de tarea desconocido: '$($selectedTask.type)'"
-            $actionTaken = $true # Pausar incluso si hay error.
+        foreach ($choice in $numericActions) {
+            $selectedTask = $tasks[$choice - 1]
+            $functionName = "_Invoke-CleanupTask-$($selectedTask.type)"
+
+            if (Get-Command $functionName -ErrorAction SilentlyContinue) {
+                & $functionName -Task $selectedTask
+                $actionTaken = $true
+            } else {
+                Write-Styled -Type Error -Message "Tipo de tarea desconocido: '$($selectedTask.type)'"
+                $actionTaken = $true # Pausar incluso si hay error.
+            }
         }
 
         if ($actionTaken) { Pause-And-Return }

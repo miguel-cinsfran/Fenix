@@ -122,6 +122,31 @@ function _Revert-Tweak-ProtectedRegistry {
     Invoke-ProtectedRegistryAction -KeyPath $details.path -Action $action
 }
 
+function _Invoke-SoftwareSearchAndInstall {
+    [CmdletBinding()]
+    param()
+
+    Show-Header -Title "Búsqueda e Instalación de Paquetes (Winget)"
+    $searchTerm = Read-Host "Introduzca el nombre o ID del paquete a buscar"
+    if (-not $searchTerm) { return }
+
+    Write-Styled -Type Info -Message "Buscando '$($searchTerm)' con Winget..."
+    $searchResult = Invoke-NativeCommand -Executable "winget" -ArgumentList "search `"$searchTerm`" --accept-source-agreements" -Activity "Buscando en Winget"
+
+    if (-not $searchResult.Success -or $searchResult.Output -match "No package found matching input criteria") {
+        Write-Styled -Type Error -Message "No se encontraron paquetes que coincidan con '$searchTerm'."
+        Pause-And-Return
+        return
+    }
+
+    Write-Host $searchResult.Output
+    Write-Styled -Type Consent -Message "Se encontraron los paquetes de arriba."
+    $idToInstall = Read-Host "Escriba el ID exacto del paquete que desea instalar (o presione Enter para cancelar)"
+
+    if ($idToInstall) {
+        Invoke-NativeCommand -Executable "winget" -ArgumentList "install --id $idToInstall --accept-package-agreements --accept-source-agreements" -Activity "Instalando $idToInstall"
+    }
+}
 #endregion
 
 function _Execute-TweakAction {
@@ -156,12 +181,28 @@ function _Execute-TweakAction {
 
 function Invoke-Phase3_Tweaks {
     param([string]$CatalogPath)
-    if (-not (Test-Path $CatalogPath)) {
-        Write-Styled -Type Error -Message "No se encontró el catálogo de tweaks en '$CatalogPath'."
+
+    try {
+        if (-not (Test-Path $CatalogPath)) {
+            throw "No se encontró el fichero de catálogo en '$CatalogPath'."
+        }
+        $catalogContent = Get-Content -Raw -Path $CatalogPath -Encoding UTF8
+        $catalogJson = $catalogContent | ConvertFrom-Json
+
+        if ($catalogJson.'$schema') {
+            $catalogDir = Split-Path -Path $CatalogPath -Parent
+            $schemaPath = Join-Path -Path $catalogDir -ChildPath $catalogJson.'$schema'
+            if (-not (Test-Json -Path $CatalogPath -SchemaPath $schemaPath)) {
+                throw "El fichero de catálogo '$((Split-Path $CatalogPath -Leaf))' no cumple con su esquema: $($_.Exception.Message)"
+            }
+            Write-Styled -Type Success -Message "El catálogo '$((Split-Path $CatalogPath -Leaf))' fue validado con éxito."
+        }
+        $tweaks = $catalogJson.items
+    } catch {
+        Write-Styled -Type Error -Message "Fallo CRÍTICO al leer o procesar el catálogo de tweaks: $($_.Exception.Message)"
         Pause-And-Return
         return
     }
-    $tweaks = (Get-Content -Raw -Path $CatalogPath -Encoding UTF8 | ConvertFrom-Json).items
 
     $exitMenu = $false
     while (-not $exitMenu) {
@@ -193,50 +234,55 @@ function Invoke-Phase3_Tweaks {
             'R' = 'Refrescar la lista.'
             '0' = 'Volver al Menú Principal.'
         }
-        $choice = Invoke-StandardMenu -Title "FASE 3: Optimización del Sistema" -MenuItems $menuItems -ActionOptions $actionOptions
+        $choices = Invoke-StandardMenu -Title "FASE 3: Optimización del Sistema" -MenuItems $menuItems -ActionOptions $actionOptions
 
         $actionTaken = $false
-        switch ($choice) {
-            'A' {
-                $items = $tweakStatusList | Where-Object { $_.Status -eq 'Pendiente' }
-                if ($items.Count -eq 0) { Write-Styled -Type Info -Message "No hay ajustes pendientes para aplicar."; Start-Sleep -Seconds 2 }
-                else {
-                    foreach($item in $items) { _Execute-TweakAction -Action "Apply" -Tweak $item.Tweak }
+
+        # Procesar acciones de una sola letra que afectan a toda la operación
+        if ($choices -contains '0') { $exitMenu = $true; continue }
+        if ($choices -contains 'R') { continue }
+        if ($choices -contains 'A') {
+            $items = $tweakStatusList | Where-Object { $_.Status -eq 'Pendiente' }
+            if ($items.Count -eq 0) { Write-Styled -Type Info -Message "No hay ajustes pendientes para aplicar."; Start-Sleep -Seconds 2 }
+            else {
+                foreach($item in $items) { _Execute-TweakAction -Action "Apply" -Tweak $item.Tweak }
+                $actionTaken = $true
+            }
+            if ($actionTaken) { Pause-And-Return; continue }
+        }
+        if ($choices -contains 'D') {
+            $items = $tweakStatusList | Where-Object { $_.Status -eq 'Aplicado' }
+            if ($items.Count -eq 0) { Write-Styled -Type Info -Message "No hay ajustes aplicados para revertir."; Start-Sleep -Seconds 2 }
+            else {
+                 if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?")[0] -eq 'S') {
+                    foreach($item in $items) { _Execute-TweakAction -Action "Revert" -Tweak $item.Tweak }
+                    $actionTaken = $true
+                 }
+            }
+            if ($actionTaken) { Pause-And-Return; continue }
+        }
+
+        # Procesar selecciones numéricas
+        $numericActions = $choices | ForEach-Object { [int]$_ } | Sort-Object
+        foreach ($choice in $numericActions) {
+            $selectedItem = $tweakStatusList[$choice - 1]
+            if ($selectedItem.Status -eq 'Pendiente') {
+                _Execute-TweakAction -Action "Apply" -Tweak $selectedItem.Tweak
+                $actionTaken = $true
+            } elseif ($selectedItem.Status -eq 'Aplicado') {
+                if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?") -eq 'S') {
+                    _Execute-TweakAction -Action "Revert" -Tweak $selectedItem.Tweak
                     $actionTaken = $true
                 }
-            }
-            'D' {
-                $items = $tweakStatusList | Where-Object { $_.Status -eq 'Aplicado' }
-                if ($items.Count -eq 0) { Write-Styled -Type Info -Message "No hay ajustes aplicados para revertir."; Start-Sleep -Seconds 2 }
-                else {
-                     if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir $($items.count) ajustes?") -eq 'S') {
-                        foreach($item in $items) { _Execute-TweakAction -Action "Revert" -Tweak $item.Tweak }
-                        $actionTaken = $true
-                     }
-                }
-            }
-            'R' { continue }
-            '0' { $exitMenu = $true; continue }
-            default {
-                $selectedItem = $tweakStatusList[[int]$choice - 1]
-                if ($selectedItem.Status -eq 'Pendiente') {
-                    _Execute-TweakAction -Action "Apply" -Tweak $selectedItem.Tweak
-                    $actionTaken = $true
-                } elseif ($selectedItem.Status -eq 'Aplicado') {
-                    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea revertir '$($selectedItem.Tweak.description)'?") -eq 'S') {
-                        _Execute-TweakAction -Action "Revert" -Tweak $selectedItem.Tweak
+            } else {
+                if ($selectedItem.Status -eq 'Aplicado (No Reversible)') {
+                    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?") -eq 'S') {
+                        _Invoke-SoftwareSearchAndInstall
                         $actionTaken = $true
                     }
                 } else {
-                    if ($selectedItem.Status -eq 'Aplicado (No Reversible)') {
-                        if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Este ajuste no se puede revertir. ¿Desea intentar buscar e instalar el paquete original?") -eq 'S') {
-                            Invoke-SoftwareSearchAndInstall
-                            $actionTaken = $true # Pausar después de que la función de búsqueda retorne.
-                        }
-                    } else {
-                        Write-Styled -Type Warn -Message "Este ajuste no se puede cambiar (Estado: $($selectedItem.Status))"
-                        Start-Sleep -Seconds 2
-                    }
+                    Write-Styled -Type Warn -Message "Este ajuste no se puede cambiar (Estado: $($selectedItem.Status))"
+                    Start-Sleep -Seconds 2
                 }
             }
         }

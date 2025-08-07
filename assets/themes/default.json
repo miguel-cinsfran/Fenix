@@ -1,0 +1,12 @@
+{
+  "Title": "Cyan",
+  "Subtle": "DarkGray",
+  "Step": "White",
+  "SubStep": "Gray",
+  "Success": "Green",
+  "Warn": "Yellow",
+  "Error": "Red",
+  "Consent": "Cyan",
+  "Info": "Gray",
+  "Log": "DarkGray"
+}

@@ -21,12 +21,31 @@ if (-not ([System.Security.Principal.WindowsPrincipal][System.Security.Principal
     exit
 }
 
-# SECCIÃ“N 2: DEFINICIÃ“N DE RUTAS Y LOGGING
-$modulesPath = Join-Path $PSScriptRoot "modules"
-$assetsPath = Join-Path $PSScriptRoot "assets"
-$catalogsPath = Join-Path $assetsPath "catalogs"
-$tweaksCatalog = Join-Path $assetsPath "catalogs/system_tweaks.json"
-$logFile = Join-Path $PSScriptRoot "Provision-Log-Phoenix-$((Get-Date).ToString('yyyyMMdd-HHmmss')).txt"
+# SECCIÓN 2: CARGA DE CONFIGURACIÓN Y DEFINICIÓN DE RUTAS
+try {
+    $configFile = Join-Path $PSScriptRoot "settings.psd1"
+    $Global:Settings = Import-PowerShellDataFile -Path $configFile
+} catch {
+    Write-Error "No se pudo cargar el fichero de configuración 'settings.psd1'. El script no puede continuar."
+    Read-Host "Presione Enter para salir."; exit
+}
+
+# Construir rutas absolutas basadas en la configuración
+$modulesPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Modules
+$catalogsPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Catalogs
+$logPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Logs
+$logFile = Join-Path $logPath "$($Global:Settings.FileNames.LogBaseName)-$((Get-Date).ToString('yyyyMMdd-HHmmss')).txt"
+$themeFile = Join-Path $PSScriptRoot (Join-Path $Global:Settings.Paths.Themes $Global:Settings.FileNames.Theme)
+$tweaksCatalog = Join-Path $catalogsPath $Global:Settings.FileNames.TweaksCatalog
+$cleanupCatalog = Join-Path $catalogsPath $Global:Settings.FileNames.CleanupCatalog
+
+# Cargar el tema de la UI desde el fichero JSON
+try {
+    $Global:Theme = Get-Content -Raw -Path $themeFile | ConvertFrom-Json
+} catch {
+    Write-Warning "No se pudo cargar el fichero de tema desde '$themeFile'. Usando colores por defecto."
+    $Global:Theme = @{ Title = "Cyan"; Subtle = "DarkGray"; Step = "White"; SubStep = "Gray"; Success = "Green"; Warn = "Yellow"; Error = "Red"; Consent = "Cyan"; Info = "Gray"; Log = "DarkGray" }
+}
 
 try { Stop-Transcript | Out-Null } catch {}
 Start-Transcript -Path $logFile
@@ -40,6 +59,7 @@ try {
     . (Join-Path $modulesPath "Phase4-WSL.ps1")
     . (Join-Path $modulesPath "Phase5-Cleanup.ps1")
     . (Join-Path $modulesPath "Phase6-CodeQuality.ps1")
+    . (Join-Path $modulesPath "Phase7-Audit.ps1")
 } catch {
     Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$modulesPath'." -F Red
     Write-Host "Error original: $($_.Exception.Message)" -F Red
@@ -81,8 +101,9 @@ $mainMenuOptions = @(
     @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-Phase2_SoftwareMenu -CatalogPath $catalogsPath } },
     @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-Phase3_Tweaks -CatalogPath $tweaksCatalog; Pause-And-Return } },
     @{ Description = "Ejecutar FASE 4: Instalación de WSL2"; Action = { Invoke-Phase4_WSL } },
-    @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-Phase5_Cleanup -CatalogPath $catalogsPath } },
-    @{ Description = "Ejecutar FASE 6: Saneamiento y Calidad del Código"; Action = { Invoke-Phase6_CodeQuality } }
+    @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-Phase5_Cleanup -CatalogPath $cleanupCatalog } },
+    @{ Description = "Ejecutar FASE 6: Saneamiento y Calidad del Código"; Action = { Invoke-Phase6_CodeQuality } },
+    @{ Description = "Ejecutar FASE 7: Generar Informe de Auditoría"; Action = { Invoke-Phase7_Audit } }
 )
 
 function Show-MainMenu {
@@ -109,13 +130,17 @@ try {
 
         $numericChoices = 1..$mainMenuOptions.Count
         $validChoices = @($numericChoices) + @('R', 'Q')
-        $choice = Invoke-MenuPrompt -ValidChoices $validChoices
+        $choices = Invoke-MenuPrompt -ValidChoices $validChoices
 
-        switch ($choice) {
-            'R' { Clear-Host; continue }
-            'Q' { $exitMainMenu = $true; continue }
-            default {
-                $chosenIndex = [int]$choice - 1
+        if ($choices -contains 'Q') { $exitMainMenu = $true; continue }
+        if ($choices -contains 'R') { Clear-Host; continue }
+
+        # Ordenar las selecciones numéricas para una ejecución predecible.
+        $numericActions = $choices | ForEach-Object { [int]$_ } | Sort-Object
+
+        foreach ($choice in $numericActions) {
+            $chosenIndex = $choice - 1
+            if ($chosenIndex -ge 0 -and $chosenIndex -lt $mainMenuOptions.Count) {
                 $chosenOption = $mainMenuOptions[$chosenIndex]
                 & $chosenOption.Action
                 if ($global:RebootIsPending) {

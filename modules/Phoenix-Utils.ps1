@@ -10,18 +10,13 @@
     Autor: miguel-cinsfran
 #>
 
-# VARIABLES GLOBALES DE ESTILO (CARGADAS UNA VEZ)
-$Global:Theme = @{
-    Title     = "Cyan"
-    Subtle    = "DarkGray"
-    Step      = "White"
-    SubStep   = "Gray"
-    Success   = "Green"
-    Warn      = "Yellow"
-    Error     = "Red"
-    Consent   = "Cyan"
-    Info      = "Gray"
-    Log       = "DarkGray"
+# DEFINICIONES DE CLASES GLOBALES
+class PackageStatus {
+    [string]$DisplayName
+    [psobject]$Package
+    [string]$Status
+    [string]$VersionInfo
+    [bool]$IsUpgradable
 }
 
 # FUNCIONES DE UI
@@ -94,7 +89,7 @@ function Pause-And-Return {
 
 function Invoke-RestartPrompt {
     Write-Styled -Type Warn -Message "Se requiere un reinicio para aplicar completamente los cambios."
-    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?") -eq 'S') {
+    if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "Desea reiniciar el equipo ahora?")[0] -eq 'S') {
         Write-Styled -Type Info -Message "Reiniciando el equipo en 5 segundos..."
         Start-Sleep -Seconds 5
         Restart-Computer -Force
@@ -111,24 +106,51 @@ function Invoke-MenuPrompt {
 
     try {
         while ($true) {
-            # Usar Read-Host con -Prompt es más robusto que Write-Host -NoNewline
-            $input = (Read-Host -Prompt "  -> $PromptMessage").Trim().ToUpper()
+            $input = (Read-Host -Prompt "  -> $PromptMessage (se permiten múltiples, ej: 1,3,5-8)").Trim().ToUpper()
+            if ([string]::IsNullOrWhiteSpace($input)) { continue }
 
-            if ($ValidChoices -contains $input) {
-                return $input
+            $expandedChoices = [System.Collections.Generic.List[string]]::new()
+            $validInput = $true
+
+            # Dividir la entrada por comas y procesar cada parte.
+            $parts = $input -split ','
+            foreach ($part in $parts) {
+                $part = $part.Trim()
+                if ($part -match '(\w+)-(\w+)') { # Es un rango como '5-8'
+                    $start = $matches[1]; $end = $matches[2]
+                    # Validar que los rangos son numéricos y en el orden correcto.
+                    if ($start -match '^\d+$' -and $end -match '^\d+$' -and [int]$start -le [int]$end) {
+                        ([int]$start..[int]$end) | ForEach-Object { $expandedChoices.Add("$_") }
+                    } else {
+                        $validInput = $false; break
+                    }
+                } else { # Es un solo valor
+                    $expandedChoices.Add($part)
+                }
             }
 
-            # En lugar de manipular el cursor, simplemente se muestra un error. El bucle
-            # principal que llama al menú (ej. en el Launcher) se encargará de redibujar
-            # la pantalla, o el siguiente prompt aparecerá en una nueva línea.
-            Write-Styled -Type Error -Message "Opción no válida. Por favor, inténtelo de nuevo."
-            # Una pequeña pausa para que el usuario pueda leer el error.
-            Start-Sleep -Seconds 1
-            # Se necesita una línea en blanco para separar el error del siguiente prompt
-            Write-Host
+            if (-not $validInput) {
+                Write-Styled -Type Error -Message "Rango no válido detectado. Use un formato como '5-8'."; Start-Sleep -s 1; Write-Host; continue
+            }
+
+            # Validar cada elección expandida contra las opciones válidas.
+            $finalChoices = [System.Collections.Generic.List[string]]::new()
+            $invalidChoices = [System.Collections.Generic.List[string]]::new()
+            foreach ($choice in $expandedChoices) {
+                if ($ValidChoices -contains $choice) {
+                    $finalChoices.Add($choice)
+                } else {
+                    $invalidChoices.Add($choice)
+                }
+            }
+
+            if ($invalidChoices.Count -gt 0) {
+                Write-Styled -Type Error -Message "Opciones no válidas: $($invalidChoices -join ', ')"; Start-Sleep -s 1; Write-Host
+            } else {
+                return $finalChoices.ToArray()
+            }
         }
     } catch [System.Management.Automation.PipelineStoppedException] {
-        # Capturada por el manejador de Ctrl+C del lanzador, simplemente re-lanzar.
         throw
     }
 }
@@ -347,7 +369,7 @@ function Invoke-PostInstallConfiguration {
     }
 
     Write-Styled -Type Consent -Message "El paquete '$friendlyName' tiene una configuración de productividad/accesibilidad disponible."
-    if ('N' -eq (Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage '¿Desea aplicar esta configuración ahora?')) {
+    if ('N' -eq (Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage '¿Desea aplicar esta configuración ahora?')[0]) {
         Write-Styled -Type Info -Message "Se omitió la aplicación de la configuración para '$friendlyName'."
         return
     }
@@ -438,5 +460,34 @@ function Invoke-EnsureFileEncoding {
     } else {
         Write-Styled -Type Success -Message "Todos los ficheros ya tienen la codificación correcta (UTF-8 con BOM)."
     }
+}
+#endregion
+
+#region Package Management Helpers
+function Invoke-ProcessPackageCatalog {
+    [CmdletBinding()]
+    param(
+        [string]$ManagerName,
+        [array]$CatalogPackages,
+        [scriptblock]$StatusCheckBlock
+    )
+    $packageStatusList = [System.Collections.Generic.List[PackageStatus]]::new()
+    for ($i = 0; $i -lt $CatalogPackages.Count; $i++) {
+        $pkg = $CatalogPackages[$i]
+        $displayName = if ($pkg.name) { $pkg.name } else { $pkg.installId }
+        Write-Progress -Activity "Procesando estado de paquetes de $ManagerName" -Status "Verificando: ${displayName}" -PercentComplete (($i / $CatalogPackages.Count) * 100)
+
+        $statusInfo = & $StatusCheckBlock -Package $pkg
+
+        $packageStatusList.Add([PackageStatus]@{
+            DisplayName  = $displayName
+            Package      = $pkg
+            Status       = $statusInfo.Status
+            VersionInfo  = $statusInfo.VersionInfo
+            IsUpgradable = $statusInfo.IsUpgradable
+        })
+    }
+    Write-Progress -Activity "Procesando estado de paquetes de $ManagerName" -Completed
+    return $packageStatusList
 }
 #endregion
