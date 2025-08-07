@@ -1,45 +1,30 @@
-﻿<#
+<#
 .SYNOPSIS
-    Una herramienta de saneamiento de ficheros para desarrolladores.
+    Módulo de Fase 6 para el saneamiento y la calidad del código.
 .DESCRIPTION
-    Este script busca de forma recursiva y corrige problemas comunes en ficheros de texto,
-    haciéndolo ideal para mantener la consistencia en proyectos de software.
-
-    Capacidades:
-    1. Repara caracteres corruptos del español (ej. 'ó' -> 'ó').
-    2. Estandariza los finales de línea a CRLF (Windows) o LF (Unix).
-    3. Elimina espacios y tabulaciones innecesarias al final de cada línea.
-    4. Asegura que cada fichero termine con un carácter de nueva línea.
-    5. Convierte los ficheros a la codificación UTF-8 con BOM para máxima compatibilidad.
-
-    El script es seguro: primero analiza y presenta un informe detallado, y no realiza
-    ningún cambio sin la confirmación explícita del usuario.
+    Proporciona una interfaz interactiva para analizar y corregir problemas comunes
+    de formato y codificación en ficheros de texto dentro de un proyecto.
 .NOTES
-    Versión: 2.4
-    Autor: miguel-cinsfran
-    Revisión: Reescrito el diccionario de reparación para construir tanto las CLAVES
-             como los VALORES a partir de sus códigos de carácter, garantizando
-             la inmunidad total a errores de sintaxis y codificación.
+    Versión: 3.0 (Integrado en Fénix)
+    Autor: miguel-cinsfran & Jules
 #>
 
-#region CONFIGURACIÓN
-# --- Extensiones de fichero a procesar ---
-$targetExtensions = @("*.ps1", "*.json", "*.md", "*.txt", "*.csv", "*.xml", "*.html", "*.css", "*.js")
+#region Configuración y Estado
+$global:CodeQualityConfig = @{
+    TargetDirectory = $PSScriptRoot
+    TargetExtensions = @("*.ps1", "*.json", "*.md", "*.txt", "*.csv", "*.xml", "*.html", "*.css", "*.js")
+    Rules = @{
+        FixCharacterEncoding = $true
+        NormalizeLineEndings = $true
+        TrimTrailingWhitespace = $true
+        EnsureFinalNewline = $true
+    }
+    LineEnding = 'CRLF' # Opciones: 'CRLF', 'LF'
+}
 
-# --- Opciones de Saneamiento (Activa o desactiva las correcciones) ---
-$fixCharacterEncoding = $true       # ¿Reparar caracteres como 'ó' a 'ó'?
-$normalizeLineEndings = $true       # ¿Estandarizar finales de línea?
-$trimTrailingWhitespace = $true       # ¿Eliminar espacios/tabs al final de las líneas?
-$ensureFinalNewline = $true       # ¿Asegurar que el fichero termine con una nueva línea?
-
-# --- Configuración de Final de Línea (Elige el estándar a aplicar) ---
-# Usa 'CRLF' para Windows (predeterminado) o 'LF' para Unix/Linux/macOS.
-$targetLineEnding = 'CRLF' # Opciones: 'CRLF', 'LF'
-
-# --- Diccionario de reparación de caracteres corruptos (VERSIÓN DEFINITIVA) ---
-# Tanto las CLAVES como los VALORES se construyen a partir de sus códigos de carácter.
-# Esto hace que el script sea 100% inmune a errores de codificación/copiar-pegar.
-$corruptionMap = @{
+# Diccionario de reparación de caracteres corruptos.
+# Inmune a la corrupción del propio script al construir los caracteres desde sus códigos.
+$global:CorruptionMap = @{
     # --- MINÚSCULAS ---
     "$([char]195)$([char]161)" = "$([char]225)"; # á -> á
     "$([char]195)$([char]169)" = "$([char]233)"; # é -> é
@@ -57,143 +42,262 @@ $corruptionMap = @{
     # --- SIGNOS Y OTROS ---
     "$([char]194)$([char]191)" = "$([char]191)"; # ¿ -> ¿
     "$([char]194)$([char]161)" = "$([char]161)"; # ¡ -> ¡
-    "$([char]226)$([char]128)$([char]156)" = "$([char]8220)"; # â€œ -> “ (Left Double Quote)
-    "$([char]226)$([char]128)$([char]157)" = "$([char]8221)"; # â€  -> ” (Right Double Quote)
-    "$([char]226)$([char]128)$([char]153)" = "$([char]8217)"; # â€™ -> ’ (Right Single Quote)
-    "$([char]226)$([char]128)$([char]166)" = "$([char]8230)"; # â€¦ -> … (Ellipsis)
+    "$([char]226)$([char]128)$([char]156)" = "$([char]8220)"; # â€œ -> “
+    "$([char]226)$([char]128)$([char]157)" = "$([char]8221)"; # â€  -> ”
+    "$([char]226)$([char]128)$([char]153)" = "$([char]8217)"; # â€™ -> ’
+    "$([char]226)$([char]128)$([char]166)" = "$([char]8230)"; # â€¦ -> …
 }
-
-# --- Definiciones Internas ---
-$utf8Bom = [byte[]](0xEF, 0xBB, 0xBF)
-$newLineChar = if ($targetLineEnding -eq 'LF') { "`n" } else { "`r`n" }
 #endregion
 
-#region LÓGICA PRINCIPAL
-$startTimestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$transcriptLogFile = Join-Path $PSScriptRoot "Sanitize-Files-Transcript-$startTimestamp.log"
-$errorLogFile = Join-Path $PSScriptRoot "Sanitize-Files-FailedFiles-$startTimestamp.log"
+#region Funciones de Lógica Interna
+function _Analyze-Directory {
+    param([hashtable]$Config)
 
-try { Start-Transcript -Path $transcriptLogFile -Append:$false } catch {}
+    Write-Styled -Type Step -Message "Iniciando análisis en: $($Config.TargetDirectory)"
+    Write-Styled -Type Info -Message "Extensiones objetivo: $($Config.TargetExtensions -join ', ')"
 
-try {
-    Clear-Host
-    Write-Host "--- Herramienta de Saneamiento de Ficheros v2.4 ---" -ForegroundColor Cyan
-    Write-Host "Analizando ficheros en: $PSScriptRoot`n"
-
-    # 1. FASE DE ANÁLISIS
     $filesToProcess = @()
-    $allFiles = Get-ChildItem -Path $PSScriptRoot -Recurse -Include $targetExtensions -File -ErrorAction SilentlyContinue
+    $allFiles = Get-ChildItem -Path $Config.TargetDirectory -Recurse -Include $Config.TargetExtensions -File -ErrorAction SilentlyContinue
+
+    if ($allFiles.Count -eq 0) {
+        Write-Styled -Type Warn -Message "No se encontraron ficheros que coincidan con las extensiones en el directorio especificado."
+        return $null
+    }
+
+    $utf8Bom = [byte[]](0xEF, 0xBB, 0xBF)
 
     foreach ($file in $allFiles) {
         $reason = ""
-        $contentLines = Get-Content -Path $file.FullName -ErrorAction SilentlyContinue
-        $rawContent = $contentLines -join "`n" # Usar `n como separador neutro para el análisis
+        try {
+            $contentLines = Get-Content -Path $file.FullName -ErrorAction Stop
+            $rawContent = $contentLines -join "`n" # Usar `n como separador neutro para el análisis
 
-        # Comprobación 1: BOM
-        $fileBytes = Get-Content -Path $file.FullName -Encoding Byte -TotalCount 3 -ErrorAction SilentlyContinue
-        if ($fileBytes.Length -lt 3 -or $fileBytes[0] -ne $utf8Bom[0] -or $fileBytes[1] -ne $utf8Bom[1] -or $fileBytes[2] -ne $utf8Bom[2]) {
-            $reason += "[Sin BOM] "
-        }
+            # Comprobación 1: BOM (Siempre se comprueba, ya que la corrección es guardando como UTF8 con BOM)
+            $fileBytes = Get-Content -Path $file.FullName -Encoding Byte -TotalCount 3 -ErrorAction Stop
+            if ($fileBytes.Length -lt 3 -or $fileBytes[0] -ne $utf8Bom[0] -or $fileBytes[1] -ne $utf8Bom[1] -or $fileBytes[2] -ne $utf8Bom[2]) {
+                $reason += "[Sin BOM/Codificación incorrecta] "
+            }
 
-        # Comprobación 2: Caracteres corruptos
-        if ($fixCharacterEncoding) {
-            foreach ($key in $corruptionMap.Keys) { if ($rawContent.Contains($key)) { $reason += "[Corrupto] "; break } }
-        }
+            # Comprobación 2: Caracteres corruptos
+            if ($Config.Rules.FixCharacterEncoding) {
+                foreach ($key in $global:CorruptionMap.Keys) { if ($rawContent.Contains($key)) { $reason += "[Caracteres corruptos] "; break } }
+            }
 
-        # Comprobación 3: Finales de línea
-        if ($normalizeLineEndings -and $rawContent -match "(?<!`r)`n|`r(?!`n)") {
-            $reason += "[Finales de Línea Mixtos] "
-        }
+            # Comprobación 3: Finales de línea
+            if ($Config.Rules.NormalizeLineEndings -and $rawContent -match "(?<!`r)`n|`r(?!`n)") {
+                $reason += "[Finales de línea mixtos] "
+            }
 
-        # Comprobación 4: Espacios finales
-        if ($trimTrailingWhitespace -and ($contentLines | Where-Object { $_ -match '\s+$' })) {
-            $reason += "[Espacios Finales] "
-        }
+            # Comprobación 4: Espacios finales
+            if ($Config.Rules.TrimTrailingWhitespace -and ($contentLines | Where-Object { $_ -match '\s+$' })) {
+                $reason += "[Espacios finales] "
+            }
 
-        # Comprobación 5: Nueva línea final
-        if ($ensureFinalNewline -and -not ($rawContent.EndsWith("`n"))) {
-            $reason += "[Sin Nueva Línea Final] "
-        }
+            # Comprobación 5: Nueva línea final
+            if ($Config.Rules.EnsureFinalNewline -and -not ($rawContent.EndsWith("`n"))) {
+                $reason += "[Sin nueva línea final] "
+            }
 
-        if ($reason) {
-            $filesToProcess += [PSCustomObject]@{ Path = $file.FullName; Reason = $reason.Trim() }
+            if ($reason) {
+                $filesToProcess += [PSCustomObject]@{ Path = $file.FullName; Reason = $reason.Trim() }
+            }
+        } catch {
+            Write-Styled -Type Error -Message "No se pudo analizar el fichero '$($file.Name)'. Saltando. Error: $($_.Exception.Message)"
         }
     }
 
-    # 2. FASE DE CONFIRMACIÓN
-    if ($filesToProcess.Count -eq 0) {
-        Write-Host "`nAnálisis completo. ¡Todos los ficheros cumplen con los estándares configurados!" -ForegroundColor Green
-        Read-Host "`nPresione Enter para salir."; exit
-    }
+    return $filesToProcess
+}
 
-    Write-Host "`nAnálisis completo. Se encontraron $($filesToProcess.Count) ficheros que necesitan ser saneados:" -ForegroundColor Yellow
-    $filesToProcess | ForEach-Object { Write-Host "  - $($_.Path) ($($_.Reason))" }
-
-    Write-Host "`nEl script aplicará las correcciones configuradas y guardará los ficheros como UTF-8 con BOM." -ForegroundColor White
-    if ((Read-Host "¿Desea proceder con los cambios? (S/N)").Trim().ToUpper() -ne 'S') {
-        Write-Host "`nOperación cancelada. No se ha modificado ningún fichero." -ForegroundColor Red
-        Read-Host "Presione Enter para salir."; exit
-    }
-
-    # 3. FASE DE EJECUCIÓN
-    Write-Host "`nIniciando proceso de saneamiento..." -ForegroundColor Cyan
+function _Execute-Sanitization {
+    param(
+        [array]$FilesToProcess,
+        [hashtable]$Config
+    )
+    Write-Styled -Type Step -Message "Iniciando proceso de saneamiento para $($FilesToProcess.Count) fichero(s)..."
     $failedFiles = @()
+    $newLineChar = if ($Config.LineEnding -eq 'LF') { "`n" } else { "`r`n" }
 
-    foreach ($fileInfo in $filesToProcess) {
-        Write-Host "Procesando: $($fileInfo.Path)" -ForegroundColor White
+    foreach ($fileInfo in $FilesToProcess) {
+        Write-Styled -Type SubStep -Message "Procesando: $($fileInfo.Path)"
         try {
             $fileContentLines = Get-Content -Path $fileInfo.Path -ErrorAction Stop
             $processedLines = @()
-            $report = ""
 
             foreach ($line in $fileContentLines) {
                 $processedLine = $line
-                if ($trimTrailingWhitespace) { $processedLine = $processedLine.TrimEnd() }
+                if ($Config.Rules.TrimTrailingWhitespace) { $processedLine = $processedLine.TrimEnd() }
                 $processedLines += $processedLine
             }
-            if ($trimTrailingWhitespace) { $report += "[Espacios Finales Limpiados] " }
 
             $fullContent = $processedLines -join $newLineChar
-            if ($normalizeLineEndings) { $report += "[Finales de Línea Normalizados] " }
 
-            if ($ensureFinalNewline -and -not ($fullContent.EndsWith($newLineChar))) {
+            if ($Config.Rules.EnsureFinalNewline -and -not ($fullContent.EndsWith($newLineChar))) {
                 $fullContent += $newLineChar
-                $report += "[Nueva Línea Final Añadida] "
             }
 
-            if ($fixCharacterEncoding) {
-                foreach ($entry in $corruptionMap.GetEnumerator()) {
+            if ($Config.Rules.FixCharacterEncoding) {
+                foreach ($entry in $global:CorruptionMap.GetEnumerator()) {
                     if ($fullContent.Contains($entry.Key)) {
                         $fullContent = $fullContent.Replace($entry.Key, $entry.Value)
                     }
                 }
-                $report += "[Caracteres Reparados] "
             }
 
+            # La corrección de finales de línea y BOM se aplica al guardar
             Set-Content -Path $fileInfo.Path -Value $fullContent -Encoding UTF8 -Force -NoNewline -ErrorAction Stop
-            $report += "[Guardado como UTF-8 con BOM]"
-            Write-Host "  - [ÉXITO] $report" -ForegroundColor Green
+            Write-Styled -Type Success -Message "Fichero saneado y guardado como UTF-8 con BOM."
 
         } catch {
-            $errorMessage = "No se pudo procesar este fichero. Error: $($_.Exception.Message)"
-            Write-Host "  - [ERROR] $errorMessage" -ForegroundColor Red
+            Write-Styled -Type Error -Message "No se pudo procesar este fichero. Error: $($_.Exception.Message)"
             $failedFiles += [PSCustomObject]@{ Path = $fileInfo.Path; Error = $_.Exception.Message }
         }
     }
 
-    # 4. FASE DE REPORTE FINAL
-    Write-Host "`n--- Proceso Finalizado ---" -ForegroundColor Cyan
+    Write-Styled -Type Step -Message "Proceso de saneamiento finalizado."
     if ($failedFiles.Count -gt 0) {
-        Write-Host "`n¡ATENCIÓN! Se encontraron $($failedFiles.Count) errores durante el proceso:" -ForegroundColor Red
-        $failedFiles | ForEach-Object { Write-Host "  - Fichero: $($_.Path)`n    Error: $($_.Error)" -ForegroundColor Yellow }
-        $errorContent = $failedFiles | ForEach-Object { "Fichero: $($_.Path)`r`nError: $($_.Error)`r`n---" }
-        Set-Content -Path $errorLogFile -Value $errorContent -Encoding UTF8
-        Write-Host "`nSe ha creado un fichero de log con los detalles de los errores en: $errorLogFile" -ForegroundColor Yellow
+        Write-Styled -Type Warn -Message "$($failedFiles.Count) fichero(s) no pudieron ser procesados. Revise los errores anteriores."
     }
-    Write-Host "`nSe ha guardado un log completo de esta sesión en: $transcriptLogFile" -ForegroundColor Gray
+}
+#endregion
 
-} finally {
-    Read-Host "`nPresione Enter para salir."
-    Stop-Transcript
+#region Funciones de Menú y UI
+function _Show-Current-Configuration {
+    Show-Header -Title "Configuración Actual de Saneamiento"
+    Write-Styled -Type Title -Message "Directorio Objetivo:"
+    Write-Styled -Type Info -Message "  $($global:CodeQualityConfig.TargetDirectory)"
+    Write-Host
+
+    Write-Styled -Type Title -Message "Extensiones Objetivo:"
+    Write-Styled -Type Info -Message "  $($global:CodeQualityConfig.TargetExtensions -join ', ')"
+    Write-Host
+
+    Write-Styled -Type Title -Message "Reglas de Saneamiento:"
+    $global:CodeQualityConfig.Rules.GetEnumerator() | ForEach-Object {
+        $status = if ($_.Value) { "[ACTIVADO]" } else { "[DESACTIVADO]" }
+        $color = if ($_.Value) { 'Success' } else { 'Error' }
+        Write-Styled -Type $color -Message "  $($_.Name): $status"
+    }
+    Write-Host
+
+    Write-Styled -Type Title -Message "Formato de Fin de Línea:"
+    Write-Styled -Type Info -Message "  $($global:CodeQualityConfig.LineEnding)"
+    Write-Host
+}
+
+function _Configure-Sanitization-Rules {
+    $exitMenu = $false
+    while (-not $exitMenu) {
+        Show-Header -Title "Configurar Reglas de Saneamiento"
+
+        # Opciones de Reglas
+        Write-Styled -Type Step -Message "[1] Cambiar Directorio Objetivo"
+        Write-Styled -Type Info -Message "    Actual: $($global:CodeQualityConfig.TargetDirectory)"
+        Write-Styled -Type Step -Message "[2] Cambiar Extensiones Objetivo"
+        Write-Styled -Type Info -Message "    Actual: $($global:CodeQualityConfig.TargetExtensions -join ', ')"
+        Write-Styled -Type Step -Message "[3] Cambiar Formato de Fin de Línea (Actual: $($global:CodeQualityConfig.LineEnding))"
+
+        # Opciones de Activación/Desactivación
+        $rules = $global:CodeQualityConfig.Rules.GetEnumerator() | Sort-Object Name
+        for ($i = 0; $i -lt $rules.Count; $i++) {
+            $rule = $rules[$i]
+            $status = if ($rule.Value) { "[ACTIVADO]" } else { "[DESACTIVADO]" }
+            Write-Styled -Type Step -Message "[$($i + 4)] Activar/Desactivar $($rule.Name) $status"
+        }
+
+        Write-Styled -Type Step -Message "[0] Guardar y Volver"
+
+        $validChoices = 0..($rules.Count + 3)
+        $choice = Invoke-MenuPrompt -ValidChoices $validChoices -PromptMessage "Seleccione una opción para modificar"
+
+        switch ($choice) {
+            '0' { $exitMenu = $true; continue }
+            '1' {
+                $newDir = Read-Host "  -> Introduzca la nueva ruta del directorio objetivo"
+                if (Test-Path $newDir -PathType Container) {
+                    $global:CodeQualityConfig.TargetDirectory = $newDir
+                    Write-Styled -Type Success -Message "Directorio actualizado."
+                } else {
+                    Write-Styled -Type Error -Message "La ruta proporcionada no es un directorio válido."
+                }
+                Start-Sleep -Seconds 1
+            }
+            '2' {
+                $newExts = Read-Host "  -> Introduzca las nuevas extensiones separadas por comas (ej: *.txt,*.log)"
+                $global:CodeQualityConfig.TargetExtensions = $newExts -split ',' | ForEach-Object { $_.Trim() }
+                Write-Styled -Type Success -Message "Extensiones actualizadas."
+                Start-Sleep -Seconds 1
+            }
+            '3' {
+                $global:CodeQualityConfig.LineEnding = if ($global:CodeQualityConfig.LineEnding -eq 'CRLF') { 'LF' } else { 'CRLF' }
+                Write-Styled -Type Success -Message "Formato de fin de línea cambiado a $($global:CodeQualityConfig.LineEnding)."
+                Start-Sleep -Seconds 1
+            }
+            default {
+                $ruleIndex = [int]$choice - 4
+                $ruleName = $rules[$ruleIndex].Name
+                $global:CodeQualityConfig.Rules[$ruleName] = -not $global:CodeQualityConfig.Rules[$ruleName]
+            }
+        }
+    }
+}
+
+function _Run-Sanitization-Process {
+    $filesToFix = _Analyze-Directory -Config $global:CodeQualityConfig
+
+    if ($null -eq $filesToFix) { # Caso de no encontrar ficheros
+        Pause-And-Return
+        return
+    }
+
+    if ($filesToFix.Count -eq 0) {
+        Write-Styled -Type Success -Message "¡Análisis completo! Todos los ficheros cumplen con los estándares configurados."
+        Pause-And-Return
+        return
+    }
+
+    Show-Header -Title "Análisis Completado"
+    Write-Styled -Type Warn -Message "Se encontraron $($filesToFix.Count) fichero(s) que necesitan ser saneados:"
+    $filesToFix | ForEach-Object { Write-Styled -Type Info -Message "  - $($_.Path) ($($_.Reason))" }
+    Write-Host
+
+    $consent = Invoke-MenuPrompt -ValidChoices @('S', 'N') -PromptMessage "El script aplicará las correcciones configuradas. ¿Desea proceder? (S/N)"
+    if ($consent -ne 'S') {
+        Write-Styled -Type Error -Message "Operación cancelada por el usuario."
+        Pause-And-Return
+        return
+    }
+
+    _Execute-Sanitization -FilesToProcess $filesToFix -Config $global:CodeQualityConfig
+    Pause-And-Return
+}
+#endregion
+
+#region Punto de Entrada Principal de la Fase
+function Invoke-Phase6_CodeQuality {
+    $exitMenu = $false
+    while (-not $exitMenu) {
+        Show-Header -Title "FASE 6: Saneamiento y Calidad del Código"
+        $menuOptions = @(
+            @{ Description = "Analizar y Sanear Directorio"; Action = { _Run-Sanitization-Process } },
+            @{ Description = "Configurar Reglas de Saneamiento"; Action = { _Configure-Sanitization-Rules } },
+            @{ Description = "Ver Configuración Actual"; Action = { _Show-Current-Configuration; Pause-And-Return } }
+        )
+
+        for ($i = 0; $i -lt $menuOptions.Count; $i++) {
+            Write-Styled -Type Step -Message "[$($i+1)] $($menuOptions[$i].Description)"
+        }
+        Write-Styled -Type Step -Message "[0] Volver al Menú Principal"
+        Write-Host
+
+        $choice = Invoke-MenuPrompt -ValidChoices @('1', '2', '3', '0')
+
+        switch ($choice) {
+            '0' { $exitMenu = $true }
+            '1' { & $menuOptions[0].Action }
+            '2' { & $menuOptions[1].Action }
+            '3' { & $menuOptions[2].Action }
+        }
+    }
 }
 #endregion

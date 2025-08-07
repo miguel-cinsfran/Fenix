@@ -39,6 +39,7 @@ try {
     . (Join-Path $modulesPath "Phase3-Tweaks.ps1")
     . (Join-Path $modulesPath "Phase4-WSL.ps1")
     . (Join-Path $modulesPath "Phase5-Cleanup.ps1")
+    . (Join-Path $modulesPath "Phase6-CodeQuality.ps1")
 } catch {
     Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$modulesPath'." -F Red
     Write-Host "Error original: $($_.Exception.Message)" -F Red
@@ -80,7 +81,8 @@ $mainMenuOptions = @(
     @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-Phase2_SoftwareMenu -CatalogPath $catalogsPath } },
     @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-Phase3_Tweaks -CatalogPath $tweaksCatalog; Pause-And-Return } },
     @{ Description = "Ejecutar FASE 4: Instalación de WSL2"; Action = { Invoke-Phase4_WSL } },
-    @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-Phase5_Cleanup -CatalogPath $catalogsPath } }
+    @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-Phase5_Cleanup -CatalogPath $catalogsPath } },
+    @{ Description = "Ejecutar FASE 6: Saneamiento y Calidad del Código"; Action = { Invoke-Phase6_CodeQuality } }
 )
 
 function Show-MainMenu {
