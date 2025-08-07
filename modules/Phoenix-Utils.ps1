@@ -27,15 +27,23 @@ function Show-Header {
     )
     $underline = "$([char]27)[4m"; $reset = "$([char]27)[0m"
     if (-not $NoClear) { Clear-Host }
-    Write-Host; Write-Host "$underline$TitleText$reset" -F $Global:Theme.Title; Write-Host "---" -F $Global:Theme.Subtle; Write-Host
+
+    $titleColor = if ($Global:Theme.Title) { $Global:Theme.Title } else { "Cyan" }
+    $subtleColor = if ($Global:Theme.Subtle) { $Global:Theme.Subtle } else { "DarkGray" }
+
+    Write-Host; Write-Host "$underline$TitleText$reset" -ForegroundColor $titleColor; Write-Host "---" -ForegroundColor $subtleColor; Write-Host
 }
 
 function Write-Styled {
     param([string]$Message, [string]$Type = "Info", [switch]$NoNewline)
     $prefixMap = @{ Step="  -> "; SubStep="     - "; Success=" [ÉXITO] "; Warn=" [OMITIDO] "; Error=" [ERROR] "; Log="       | " }
     $prefix = $prefixMap[$Type]
-    if ($NoNewline) { Write-Host "$prefix$Message" -F $Global:Theme[$Type] -NoNewline }
-    else { Write-Host "$prefix$Message" -F $Global:Theme[$Type] }
+
+    $color = $Global:Theme[$Type]
+    if (-not $color) { $color = "White" } # Fallback to white if color not in theme
+
+    if ($NoNewline) { Write-Host "$prefix$Message" -ForegroundColor $color -NoNewline }
+    else { Write-Host "$prefix$Message" -ForegroundColor $color }
 }
 
 function Invoke-StandardMenu {
