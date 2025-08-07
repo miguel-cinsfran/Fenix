@@ -1,27 +1,27 @@
-<#
+﻿<#
 .SYNOPSIS
     Orquestador central para el motor de aprovisionamiento Fénix.
 .DESCRIPTION
     Este script es el único punto de entrada. Carga los módulos de fase, gestiona el estado
     global (con persistencia inteligente), el menú principal, el logging y el manejo de interrupciones.
 .NOTES
-    Versión: 3.1
+    Versión: 3.2
     Autor: miguel-cinsfran
     Requiere: Privilegios de Administrador. Estructura de directorios modular.
 #>
 
-# SECCIÓN 0: CONFIGURACIÓN DE CODIFICACIÓN UNIVERSAL
+# SECCIÃ“N 0: CONFIGURACIÃ“N DE CODIFICACIÃ“N UNIVERSAL
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# SECCIÓN 1: AUTO-ELEVACIÓN DE PRIVILEGIOS
+# SECCIÃ“N 1: AUTO-ELEVACIÃ“N DE PRIVILEGIOS
 if (-not ([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Warning "Se requieren privilegios de Administrador. Relanzando..."
     Start-Process powershell -Verb RunAs -ArgumentList "-File `"$($myinvocation.mycommand.definition)`""
     exit
 }
 
-# SECCIÓN 2: CARGA DE CONFIGURACIÓN Y DEFINICIÓN DE RUTAS
+# SECCIÃ“N 2: CARGA DE CONFIGURACIÃ“N Y DEFINICIÃ“N DE RUTAS
 try {
     $configFile = Join-Path $PSScriptRoot "settings.psd1"
     $Global:Settings = Import-PowerShellDataFile -Path $configFile
@@ -50,7 +50,7 @@ try {
 try { Stop-Transcript | Out-Null } catch {}
 Start-Transcript -Path $logFile
 
-# SECCIÓN 3: CARGA DE MÓDULOS
+# SECCIÃ“N 3: CARGA DE MÃ“DULOS
 try {
     # Importar el módulo de utilidades primero, ya que otros módulos dependen de él.
     Import-Module (Join-Path $modulesPath "Phoenix-Utils.psm1") -Force
@@ -68,19 +68,19 @@ try {
     exit
 }
 
-# SECCIÓN 3.1: VERIFICACIÓN DE CODIFICACIÓN DE FICHEROS
+# SECCIÃ“N 3.1: VERIFICACIÃ“N DE CODIFICACIÃ“N DE FICHEROS
 # Esta función ahora es parte del módulo de utilidades y debería estar disponible.
 Set-FileEncodingToUtf8 -BasePath $PSScriptRoot -Extensions @("*.ps1", "*.psm1", "*.json", "*.md", "*.txt")
 Write-Host # Add a newline for spacing
 
-# SECCIÓN 3.5: VERIFICACIÓN INICIAL DE INTERNET
+# SECCIÃ“N 3.5: VERIFICACIÃ“N INICIAL DE INTERNET
 if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
     Write-PhoenixStyledOutput -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."
     Read-Host "Presione Enter para salir."
     exit
 }
 
-# SECCIÓN 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
+# SECCIÃ“N 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
 $global:RebootIsPending = $false
 Clear-Host
 Show-PhoenixHeader -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear
@@ -97,7 +97,7 @@ if ($consent -ne 'S') {
     exit
 }
 
-# SECCIÓN 5: BUCLE DE CONTROL PRINCIPAL
+# SECCIÃ“N 5: BUCLE DE CONTROL PRINCIPAL
 $mainMenuOptions = @(
     @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-OneDrivePhase; Request-Continuation } },
     @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-SoftwareMenuPhase -CatalogPath $catalogsPath } },

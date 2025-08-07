@@ -1,4 +1,4 @@
-# Fénix Provisioning Engine - Central Configuration File
+﻿# Fénix Provisioning Engine - Central Configuration File
 @{
     # Rutas relativas a la raíz del proyecto.
     Paths = @{
