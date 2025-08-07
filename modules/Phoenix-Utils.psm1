@@ -29,24 +29,13 @@ function Show-PhoenixHeader {
 
     $titleColor = if ($Global:Theme.Title) { $Global:Theme.Title } else { "Cyan" }
     $borderColor = if ($Global:Theme.Subtle) { $Global:Theme.Subtle } else { "DarkGray" }
-    $width = 80
 
-    $topBorder = "╔" + ("═" * ($width - 2)) + "╗"
-    $bottomBorder = "╚" + ("═" * ($width - 2)) + "╝"
-
-    # Manejar títulos más largos que el ancho del cuadro
-    $trimmedTitle = $TitleText
-    if ($trimmedTitle.Length -gt ($width - 4)) {
-        $trimmedTitle = $trimmedTitle.Substring(0, $width - 7) + "..."
-    }
-
-    $padding = $width - 4 - $trimmedTitle.Length
-    $titleLine = "║ $($trimmedTitle)" + (' ' * $padding) + " ║"
+    # Un estilo más limpio y accesible que el anterior arte ASCII.
+    $separator = "─" * ($TitleText.Length + 4) # Un poco más largo que el título para un efecto visual agradable.
 
     Write-Host
-    Write-Host $topBorder -ForegroundColor $borderColor
-    Write-Host $titleLine -ForegroundColor $titleColor
-    Write-Host $bottomBorder -ForegroundColor $borderColor
+    Write-Host "  $($TitleText.ToUpper())" -ForegroundColor $titleColor
+    Write-Host "  $separator" -ForegroundColor $borderColor
     Write-Host
 }
 
