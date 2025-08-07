@@ -16,7 +16,7 @@
     ningún cambio sin la confirmación explícita del usuario.
 .NOTES
     Versión: 2.4
-    Autor: Gemini (inspirado en el proyecto Fénix de miguel-cinsfran)
+    Autor: miguel-cinsfran
     Revisión: Reescrito el diccionario de reparación para construir tanto las CLAVES
              como los VALORES a partir de sus códigos de carácter, garantizando
              la inmunidad total a errores de sintaxis y codificación.
