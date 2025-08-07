@@ -30,8 +30,7 @@ function Invalidate-PackageCache {
 function _Invoke-ProcessPendingPackages {
     param(
         [string]$Manager,
-        [array]$PackageStatusList,
-        [psobject]$Module
+        [array]$PackageStatusList
     )
     $packagesToProcess = $PackageStatusList | Where-Object { $_.Status -eq 'No Instalado' -or $_.IsUpgradable }
     if ($packagesToProcess.Count -gt 0) {
@@ -39,9 +38,11 @@ function _Invoke-ProcessPendingPackages {
         try {
             foreach ($item in $packagesToProcess) {
                 if ($item.IsUpgradable) {
-                    & $Module.Update-Package -Item $item
+                    if ($Manager -eq 'Chocolatey') { Update-ChocoPackage -Item $item }
+                    else { Update-WingetPackage -Item $item }
                 } else {
-                    & $Module.Install-Package -Item $item
+                    if ($Manager -eq 'Chocolatey') { Install-ChocoPackage -Item $item }
+                    else { Install-WingetPackage -Item $item }
                 }
             }
             Invalidate-PackageCache -Manager $Manager
@@ -81,8 +82,7 @@ function _Get-PackageMenuActions {
 function _Invoke-SinglePackageMenu {
     param(
         [string]$Manager,
-        [psobject]$Item,
-        [psobject]$Module
+        [psobject]$Item
     )
     $exitMenu = $false
     while (-not $exitMenu) {
@@ -105,19 +105,22 @@ function _Invoke-SinglePackageMenu {
         try {
             switch ($choice) {
                 'I' {
-                    & $Module.Install-Package -Item $Item
+                    if ($Manager -eq 'Chocolatey') { Install-ChocoPackage -Item $Item }
+                    else { Install-WingetPackage -Item $Item }
                     Invalidate-PackageCache -Manager $Manager
                     $exitMenu = $true
                 }
                 'A' {
-                    & $Module.Update-Package -Item $Item
+                    if ($Manager -eq 'Chocolatey') { Update-ChocoPackage -Item $Item }
+                    else { Update-WingetPackage -Item $Item }
                     Invalidate-PackageCache -Manager $Manager
                     $exitMenu = $true
                 }
                 'D' {
                     $confirmChoice = (Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea desinstalar $($Item.DisplayName)?")
                     if ($confirmChoice[0] -eq 'S') {
-                        & $Module.Uninstall-Package -Item $Item
+                        if ($Manager -eq 'Chocolatey') { Uninstall-ChocoPackage -Item $Item }
+                        else { Uninstall-WingetPackage -Item $Item }
                         Invalidate-PackageCache -Manager $Manager
                     }
                     $exitMenu = $true
@@ -138,8 +141,7 @@ $script:wingetStatusCache = $null
 function Invoke-SoftwareManagerUI {
     param(
         [string]$Manager,
-        [string]$CatalogFile,
-        [psobject]$Module
+        [string]$CatalogFile
     )
 
     try {
@@ -169,7 +171,12 @@ function Invoke-SoftwareManagerUI {
         $packageStatusList = Get-Variable -Name $cacheVariableName -ErrorAction SilentlyContinue -ValueOnly
         if ($null -eq $packageStatusList) {
             Write-Styled -Type Info -Message "Obteniendo estado de los paquetes para ${Manager} (puede tardar)..."
-            $packageStatusList = & $Module.Get-PackageStatus -CatalogPackages $catalogPackages
+            if ($Manager -eq 'Chocolatey') {
+                $packageStatusList = Get-ChocoPackageStatus -CatalogPackages $catalogPackages
+            }
+            else {
+                $packageStatusList = Get-WingetPackageStatus -CatalogPackages $catalogPackages
+            }
             Set-Variable -Name $cacheVariableName -Value $packageStatusList
         }
 
@@ -199,7 +206,7 @@ function Invoke-SoftwareManagerUI {
         if ($choices -contains '0') { $exitManagerUI = $true; continue }
         if ($choices -contains 'R') { Invalidate-PackageCache -Manager $Manager; continue }
         if ($choices -contains 'A') {
-            _Invoke-ProcessPendingPackages -Manager $Manager -PackageStatusList $packageStatusList -Module $Module
+            _Invoke-ProcessPendingPackages -Manager $Manager -PackageStatusList $packageStatusList
             continue
         }
         if ($choices -contains 'U') {
@@ -220,7 +227,7 @@ function Invoke-SoftwareManagerUI {
             $packageIndex = $choice - 1
             if ($packageIndex -ge 0 -and $packageIndex -lt $packageStatusList.Count) {
                 $selectedItem = $packageStatusList[$packageIndex]
-                _Invoke-SinglePackageMenu -Manager $Manager -Item $selectedItem -Module $Module
+                _Invoke-SinglePackageMenu -Manager $Manager -Item $selectedItem
             }
         }
     }
@@ -293,13 +300,14 @@ function Invoke-Phase2_PreFlightChecks {
 function Invoke-Phase2_SoftwareMenu {
     param([string]$CatalogPath)
 
-    # Cargar los módulos de los gestores de paquetes
-    $managerModules = @{}
+    # Cargar los módulos de los gestores de paquetes con prefijos para evitar colisiones.
     try {
-        $managerModules['Chocolatey'] = Import-Module (Join-Path $PSScriptRoot "package_managers/chocolatey.psm1") -PassThru
-        $managerModules['Winget'] = Import-Module (Join-Path $PSScriptRoot "package_managers/winget.psm1") -PassThru
+        Import-Module (Join-Path $PSScriptRoot "package_managers/chocolatey.psm1") -Prefix "Choco" -Force
+        Import-Module (Join-Path $PSScriptRoot "package_managers/winget.psm1") -Prefix "Winget" -Force
     } catch {
-        Write-Styled -Type Error -Message "No se pudo cargar un módulo de gestor de paquetes: $($_.Exception.Message)"
+        Write-Styled -Type Error -Message "No se pudo cargar un módulo de gestor de paquetes. Esto es un error fatal."
+        Write-Styled -Type Log -Message "Error: $($_.Exception.Message)"
+        Write-Styled -Type Log -Message "Detalles: $($_.ToString())"
         Pause-And-Return; return
     }
 
@@ -325,23 +333,25 @@ function Invoke-Phase2_SoftwareMenu {
 
         switch ($choice) {
             '1' {
-                Invoke-SoftwareManagerUI -Manager 'Chocolatey' -CatalogFile $chocoCatalogFile -Module $managerModules['Chocolatey']
+                Invoke-SoftwareManagerUI -Manager 'Chocolatey' -CatalogFile $chocoCatalogFile
             }
             '2' {
-                Invoke-SoftwareManagerUI -Manager 'Winget' -CatalogFile $wingetCatalogFile -Module $managerModules['Winget']
+                Invoke-SoftwareManagerUI -Manager 'Winget' -CatalogFile $wingetCatalogFile
             }
             '3' {
                 if ((Invoke-MenuPrompt -ValidChoices @('S','N') -PromptMessage "¿Instalar todos los paquetes de AMBOS catálogos?") -eq 'S') {
-                    foreach ($managerName in $managerModules.Keys) {
-                        $managerModule = $managerModules[$managerName]
-                        $catalogFile = if ($managerName -eq 'Chocolatey') { $chocoCatalogFile } else { $wingetCatalogFile }
+                    # Chocolatey
+                    Show-Header -Title "Instalación Masiva: Chocolatey"
+                    $chocoCatalogPackages = (Get-Content -Raw -Path $chocoCatalogFile -Encoding UTF8 | ConvertFrom-Json).items
+                    $chocoStatusList = Get-ChocoPackageStatus -CatalogPackages $chocoCatalogPackages
+                    _Invoke-ProcessPendingPackages -Manager 'Chocolatey' -PackageStatusList $chocoStatusList
 
-                        Show-Header -Title "Instalación Masiva: ${managerName}"
-                        $catalogPackages = (Get-Content -Raw -Path $catalogFile -Encoding UTF8 | ConvertFrom-Json).items
-                        $packageStatusList = & $managerModule.Get-PackageStatus -CatalogPackages $catalogPackages
+                    # Winget
+                    Show-Header -Title "Instalación Masiva: Winget"
+                    $wingetCatalogPackages = (Get-Content -Raw -Path $wingetCatalogFile -Encoding UTF8 | ConvertFrom-Json).items
+                    $wingetStatusList = Get-WingetPackageStatus -CatalogPackages $wingetCatalogPackages
+                    _Invoke-ProcessPendingPackages -Manager 'Winget' -PackageStatusList $wingetStatusList
 
-                        _Invoke-ProcessPendingPackages -Manager $managerName -PackageStatusList $packageStatusList -Module $managerModule
-                    }
                     Invalidate-PackageCache -Manager 'Chocolatey'
                     Invalidate-PackageCache -Manager 'Winget'
                     Pause-And-Return
