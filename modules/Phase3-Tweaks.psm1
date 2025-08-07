@@ -284,3 +284,5 @@ function Invoke-Phase3_Tweaks {
         if ($actionTaken) { Pause-And-Return }
     }
 }
+
+Export-ModuleMember -Function *

@@ -518,3 +518,5 @@ function Invoke-Phase4_WSL {
         Pause-And-Return
     }
 }
+
+Export-ModuleMember -Function *

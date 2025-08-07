@@ -528,3 +528,5 @@ function Invoke-ProcessPackageCatalog {
     return $packageStatusList
 }
 #endregion
+
+Export-ModuleMember -Function *

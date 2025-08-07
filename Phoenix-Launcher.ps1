@@ -1,20 +1,20 @@
-﻿<#
+<#
 .SYNOPSIS
     Orquestador central para el motor de aprovisionamiento Fénix.
 .DESCRIPTION
     Este script es el único punto de entrada. Carga los módulos de fase, gestiona el estado
     global (con persistencia inteligente), el menú principal, el logging y el manejo de interrupciones.
 .NOTES
-    Versión: 3.0
+    Versión: 3.1
     Autor: miguel-cinsfran
     Requiere: Privilegios de Administrador. Estructura de directorios modular.
 #>
 
-# SECCIÃ“N 0: CONFIGURACIÃ“N DE CODIFICACIÃ“N UNIVERSAL
+# SECCIÓN 0: CONFIGURACIÓN DE CODIFICACIÓN UNIVERSAL
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# SECCIÃ“N 1: AUTO-ELEVACIÃ“N DE PRIVILEGIOS
+# SECCIÓN 1: AUTO-ELEVACIÓN DE PRIVILEGIOS
 if (-not ([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Warning "Se requieren privilegios de Administrador. Relanzando..."
     Start-Process powershell -Verb RunAs -ArgumentList "-File `"$($myinvocation.mycommand.definition)`""
@@ -50,38 +50,40 @@ try {
 try { Stop-Transcript | Out-Null } catch {}
 Start-Transcript -Path $logFile
 
-# SECCIÃ“N 3: CARGA DE MÃ“DULOS (DOT-SOURCING)
+# SECCIÓN 3: CARGA DE MÓDULOS
 try {
-    . (Join-Path $modulesPath "Phoenix-Utils.ps1")
-    . (Join-Path $modulesPath "Phase1-OneDrive.ps1")
-    . (Join-Path $modulesPath "Phase2-Software.ps1")
-    . (Join-Path $modulesPath "Phase3-Tweaks.ps1")
-    . (Join-Path $modulesPath "Phase4-WSL.ps1")
-    . (Join-Path $modulesPath "Phase5-Cleanup.ps1")
-    . (Join-Path $modulesPath "Phase6-CodeQuality.ps1")
-    . (Join-Path $modulesPath "Phase7-Audit.ps1")
+    # Importar el módulo de utilidades primero, ya que otros módulos dependen de él.
+    Import-Module (Join-Path $modulesPath "Phoenix-Utils.psm1") -Force
+
+    # Importar los módulos de fase dinámicamente
+    $phaseModules = Get-ChildItem -Path $modulesPath -Filter "Phase*.psm1" | Sort-Object Name
+    foreach ($module in $phaseModules) {
+        Write-Host "Cargando módulo: $($module.Name)" -ForegroundColor DarkGray
+        Import-Module $module.FullName -Force
+    }
 } catch {
-    Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$modulesPath'." -F Red
-    Write-Host "Error original: $($_.Exception.Message)" -F Red
+    Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$modulesPath'." -ForegroundColor Red
+    Write-Host "Error original: $($_.Exception.Message)" -ForegroundColor Red
     Read-Host "Presione Enter para salir."
     exit
 }
 
-# SECCIÃ“N 3.1: VERIFICACIÃ“N DE CODIFICACIÃ“N DE FICHEROS
-Invoke-EnsureFileEncoding -BasePath $PSScriptRoot -Extensions @("*.ps1", "*.json", "*.md", "*.txt")
+# SECCIÓN 3.1: VERIFICACIÓN DE CODIFICACIÓN DE FICHEROS
+# Esta función ahora es parte del módulo de utilidades y debería estar disponible.
+Invoke-EnsureFileEncoding -BasePath $PSScriptRoot -Extensions @("*.ps1", "*.psm1", "*.json", "*.md", "*.txt")
 Write-Host # Add a newline for spacing
 
-# SECCIÃ“N 3.5: VERIFICACIÃ“N INICIAL DE INTERNET
+# SECCIÓN 3.5: VERIFICACIÓN INICIAL DE INTERNET
 if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
     Write-Styled -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."
     Read-Host "Presione Enter para salir."
     exit
 }
 
-# SECCIÃ“N 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
+# SECCIÓN 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
 $global:RebootIsPending = $false
 Clear-Host
-Show-Header -Title "Motor de Aprovisionamiento Fénix v3.0" -NoClear
+Show-Header -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear
 Write-Styled -Type Info -Message "Este script automatiza la configuración y aprovisionamiento de un entorno de desarrollo en Windows."
 Write-Styled -Type Info -Message "Realizará cambios significativos en el sistema, como instalar/desinstalar software y aplicar optimizaciones."
 Write-Host
@@ -95,7 +97,7 @@ if ($consent -ne 'S') {
     exit
 }
 
-# SECCIÃ“N 5: BUCLE DE CONTROL PRINCIPAL (SIMPLIFICADO)
+# SECCIÓN 5: BUCLE DE CONTROL PRINCIPAL
 $mainMenuOptions = @(
     @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-Phase1_OneDrive; Pause-And-Return } },
     @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-Phase2_SoftwareMenu -CatalogPath $catalogsPath } },
@@ -108,7 +110,7 @@ $mainMenuOptions = @(
 
 function Show-MainMenu {
     param([array]$menuOptions, [switch]$NoClear)
-    Show-Header -Title "Motor de Aprovisionamiento Fénix v3.0" -NoClear:$NoClear
+    Show-Header -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear:$NoClear
     Write-Styled -Type Info -Message "Toda la salida se registrará en: $logFile`n"
 
     for ($i = 0; $i -lt $menuOptions.Count; $i++) {

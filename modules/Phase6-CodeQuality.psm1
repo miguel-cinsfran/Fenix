@@ -301,3 +301,5 @@ function Invoke-Phase6_CodeQuality {
     }
 }
 #endregion
+
+Export-ModuleMember -Function *

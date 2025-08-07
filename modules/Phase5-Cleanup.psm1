@@ -176,3 +176,5 @@ function Invoke-Phase5_Cleanup {
         if ($actionTaken) { Pause-And-Return }
     }
 }
+
+Export-ModuleMember -Function *

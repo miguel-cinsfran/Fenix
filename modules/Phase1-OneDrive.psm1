@@ -188,3 +188,5 @@ function Invoke-Phase1_OneDrive {
         Pause-And-Return
     }
 }
+
+Export-ModuleMember -Function *

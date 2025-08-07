@@ -137,3 +137,5 @@ function Invoke-Phase7_Audit {
 
     Pause-And-Return
 }
+
+Export-ModuleMember -Function *

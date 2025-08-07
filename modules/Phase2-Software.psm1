@@ -362,3 +362,5 @@ function Invoke-Phase2_SoftwareMenu {
     }
 }
 #endregion
+
+Export-ModuleMember -Function *
