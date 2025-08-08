@@ -26,7 +26,6 @@
         { "installId": "fzf", "name": "Fuzzy Finder (fzf)" },
         { "installId": "sqlite", "name": "SQLite" },
         { "installId": "lf", "name": "LF File Manager" },
-        { "installId": "btop", "name": "btop Resource Monitor" },
         { "installId": "tldr", "name": "tldr" },
         { "installId": "pandoc", "name": "Pandoc" },
         { "installId": "xsv", "name": "xsv (CSV Toolkit)" },

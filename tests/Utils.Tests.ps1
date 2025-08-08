@@ -1,5 +1,5 @@
-# Iniciar el entorno de pruebas.
-# Esto asegura que podemos encontrar el módulo de utilidades relativo a la ubicación de este script.
+﻿# Iniciar el entorno de pruebas.
+# Esto asegura que podemos encontrar el mÃ³dulo de utilidades relativo a la ubicaciÃ³n de este script.
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $projectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $utilsModulePath = Join-Path $projectRoot "modules/Phoenix-Utils.psm1"
@@ -7,15 +7,15 @@ $utilsModulePath = Join-Path $projectRoot "modules/Phoenix-Utils.psm1"
 # Importar las funciones que queremos probar.
 . $utilsModulePath
 
-# Iniciar un bloque de descripción de Pester para agrupar pruebas relacionadas.
+# Iniciar un bloque de descripciÃ³n de Pester para agrupar pruebas relacionadas.
 Describe "Request-MenuSelection" {
 
-    # Contexto: Pruebas para la lógica de selección de menú.
+    # Contexto: Pruebas para la lÃ³gica de selecciÃ³n de menÃº.
     Context "Input Parsing" {
-        # Definir las opciones válidas para las pruebas.
+        # Definir las opciones vÃ¡lidas para las pruebas.
         $validChoices = @('1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C')
 
-        # Prueba para una selección numérica única.
+        # Prueba para una selecciÃ³n numÃ©rica Ãºnica.
         It "should handle a single numeric choice" {
             Mock Read-Host { return "2" } -Verifiable
             $result = Request-MenuSelection -ValidChoices $validChoices
@@ -23,7 +23,7 @@ Describe "Request-MenuSelection" {
             Assert-VerifiableMocks
         }
 
-        # Prueba para una selección de letra única.
+        # Prueba para una selecciÃ³n de letra Ãºnica.
         It "should handle a single letter choice" {
             Mock Read-Host { return "A" } -Verifiable
             $result = Request-MenuSelection -ValidChoices $validChoices
@@ -31,7 +31,7 @@ Describe "Request-MenuSelection" {
             Assert-VerifiableMocks
         }
 
-        # Prueba para múltiples selecciones separadas por comas.
+        # Prueba para mÃºltiples selecciones separadas por comas.
         It "should handle multiple comma-separated choices" {
             Mock Read-Host { return "1,3,C" } -Verifiable
             $result = Request-MenuSelection -ValidChoices $validChoices -AllowMultipleSelections
@@ -40,7 +40,7 @@ Describe "Request-MenuSelection" {
             Assert-VerifiableMocks
         }
 
-        # Prueba para un rango de selecciones numéricas.
+        # Prueba para un rango de selecciones numÃ©ricas.
         It "should handle a numeric range" {
             Mock Read-Host { return "2-5" } -Verifiable
             $result = Request-MenuSelection -ValidChoices $validChoices -AllowMultipleSelections
@@ -49,7 +49,7 @@ Describe "Request-MenuSelection" {
             Assert-VerifiableMocks
         }
 
-        # Prueba para una combinación de selecciones (números, rangos, letras).
+        # Prueba para una combinaciÃ³n de selecciones (nÃºmeros, rangos, letras).
         It "should handle a complex mix of choices and ranges" {
             Mock Read-Host { return "1, 3-5, B, 8" } -Verifiable
             $result = Request-MenuSelection -ValidChoices $validChoices -AllowMultipleSelections
@@ -59,14 +59,14 @@ Describe "Request-MenuSelection" {
             Assert-VerifiableMocks
         }
 
-        # Prueba para ignorar opciones no válidas.
+        # Prueba para ignorar opciones no vÃ¡lidas.
         It "should ignore invalid choices in the input" {
             # Mock de Write-Host para que no imprima los mensajes de error en la consola durante la prueba.
             Mock Write-Host { }
             Mock Write-PhoenixStyledOutput { }
             Mock Start-Sleep { }
 
-            # Simular dos entradas: la primera no válida, la segunda sí.
+            # Simular dos entradas: la primera no vÃ¡lida, la segunda sÃ­.
             $userInputs = @("X,Y,Z", "1,A")
             $inputCounter = 0
             Mock Read-Host { return $userInputs[$script:inputCounter++] } -Verifiable
@@ -80,7 +80,7 @@ Describe "Request-MenuSelection" {
     }
 
     Context "Yes/No Prompt Normalization" {
-        # Prueba para la normalización de la entrada 'S' (Sí).
+        # Prueba para la normalizaciÃ³n de la entrada 'S' (SÃ­).
         It "should normalize various 'Yes' inputs to 'S'" {
             $inputs = @("s", "S", "si", "SI", "y", "Y", "yes", "YES")
             foreach ($input in $inputs) {
@@ -90,7 +90,7 @@ Describe "Request-MenuSelection" {
             }
         }
 
-        # Prueba para la normalización de la entrada 'N' (No).
+        # Prueba para la normalizaciÃ³n de la entrada 'N' (No).
         It "should normalize various 'No' inputs to 'N'" {
             $inputs = @("n", "N", "no", "NO")
             foreach ($input in $inputs) {
