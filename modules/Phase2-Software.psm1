@@ -299,6 +299,10 @@ function Test-Phase2Prerequisites {
 function Invoke-SoftwareMenuPhase {
     param([string]$CatalogPath)
 
+    if (-not (Test-Phase2Prerequisites)) {
+        return
+    }
+
     # Cargar los módulos de los gestores de paquetes con prefijos para evitar colisiones.
     try {
         Import-Module (Join-Path $PSScriptRoot "package_managers/chocolatey.psm1") -Prefix "Choco" -Force

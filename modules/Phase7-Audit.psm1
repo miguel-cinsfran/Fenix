@@ -1,13 +1,16 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 7 para la auditoría y exportación del estado del sistema.
 .DESCRIPTION
     Genera un informe en formato Markdown que resume el software instalado
-    y los ajustes (tweaks) aplicados por el motor Fénix.
+    y los ajustes (tweaks) aplicados por el motor Fénix. También incluye una
+    herramienta de auditoría de seguridad del código fuente del propio script.
 .NOTES
-    Versión: 1.0
+    Versión: 1.1
     Autor: miguel-cinsfran
 #>
+
+#region System State Audit
 
 function Get-AppliedSystemTweak {
     $tweaksCatalogPath = Join-Path $PSScriptRoot "..\\assets\\catalogs\\system_tweaks.json"
@@ -60,17 +63,16 @@ function Get-AppliedSystemTweak {
     return $appliedTweaks
 }
 
-function Invoke-AuditPhase {
-    [CmdletBinding()]
-    param()
-
-    Show-PhoenixHeader -Title "FASE 7: Auditoría y Exportación"
+function Invoke-SystemStateAudit {
+    Show-PhoenixHeader -Title "Auditoría de Estado del Sistema"
     Write-PhoenixStyledOutput -Type Info -Message "Esta fase generará un informe del estado actual del sistema."
 
     try {
         $report = [System.Text.StringBuilder]::new()
-        $reportName = "Audit-Report-$((Get-Date).ToString('yyyyMMdd-HHmmss')).md"
-        $reportPath = Join-Path $PSScriptRoot "..\\logs\\$reportName"
+        $reportName = "System-State-Report-$((Get-Date).ToString('yyyyMMdd-HHmmss')).md"
+        $logsPath = Join-Path $PSScriptRoot "..\\logs"
+        if (-not (Test-Path $logsPath)) { New-Item -Path $logsPath -ItemType Directory | Out-Null }
+        $reportPath = Join-Path $logsPath $reportName
 
         # --- Cabecera del Informe ---
         [void]$report.AppendLine("# Informe de Auditoría del Sistema - Fénix")
@@ -134,10 +136,88 @@ function Invoke-AuditPhase {
     } catch {
         Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error al generar el informe de auditoría: $($_.Exception.Message)"
     }
-
-    Request-Continuation -Message "Presione Enter para volver al menú principal..."
 }
 
-# Exportar únicamente las funciones destinadas al consumo público para evitar la
-# exposición de helpers internos y cumplir con las mejores prácticas de modularización.
+#endregion
+
+#region Code Security Audit
+
+function Invoke-CodeSecurityAudit {
+    Show-PhoenixHeader -Title "Auditoría de Seguridad del Código"
+    Write-PhoenixStyledOutput -Type Info -Message "Buscando el uso de comandos potencialmente sensibles en el código fuente de Fénix..."
+    Write-Host
+
+    $commandsToAudit = @(
+        "Invoke-RegistryActionWithPrivileges",
+        "Invoke-NativeCommandWithOutputCapture",
+        "Restart-Computer",
+        "Stop-Computer",
+        "Set-ExecutionPolicy",
+        "Invoke-Expression",
+        "iex"
+    )
+
+    $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    $scriptFiles = Get-ChildItem -Path $projectRoot -Recurse -Include @("*.ps1", "*.psm1")
+
+    $totalFindings = 0
+
+    foreach ($command in $commandsToAudit) {
+        $foundInFiles = @{}
+        foreach ($file in $scriptFiles) {
+            $matches = Select-String -Path $file.FullName -Pattern $command -SimpleMatch -CaseSensitive
+            if ($matches) {
+                $foundInFiles[$file.FullName] = $matches.Count
+                $totalFindings += $matches.Count
+            }
+        }
+
+        if ($foundInFiles.Count -gt 0) {
+            Write-PhoenixStyledOutput -Type Warn -Message "Comando encontrado: '$command'"
+            $foundInFiles.GetEnumerator() | ForEach-Object {
+                $relativePath = $_.Name.Replace($projectRoot, "").TrimStart('\')
+                Write-PhoenixStyledOutput -Type SubStep -Message "-> $relativePath (Ocurrencias: $($_.Value))"
+            }
+            Write-Host
+        }
+    }
+
+    if ($totalFindings -eq 0) {
+        Write-PhoenixStyledOutput -Type Success -Message "Auditoría completada. No se encontraron comandos de riesgo en el código fuente."
+    } else {
+        Write-PhoenixStyledOutput -Type Success -Message "Auditoría completada. Total de hallazgos: $totalFindings"
+    }
+}
+
+#endregion
+
+function Invoke-AuditPhase {
+    [CmdletBinding()]
+    param()
+
+    $exitSubMenu = $false
+    while (-not $exitSubMenu) {
+        Show-PhoenixHeader -Title "FASE 7: Auditoría"
+        Write-PhoenixStyledOutput -Type Step -Message "[1] Generar Informe de Estado del Sistema"
+        Write-PhoenixStyledOutput -Type Step -Message "[2] Ejecutar Auditoría de Seguridad del Código Fuente"
+        Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
+        Write-Host
+
+        $choice = Request-MenuSelection -ValidChoices @('1', '2', '0') -AllowMultipleSelections:$false
+        if ([string]::IsNullOrEmpty($choice)) { continue }
+
+        switch ($choice) {
+            '1' {
+                Invoke-SystemStateAudit
+                Request-Continuation -Message "Presione Enter para volver al menú de auditoría..."
+            }
+            '2' {
+                Invoke-CodeSecurityAudit
+                Request-Continuation -Message "Presione Enter para volver al menú de auditoría..."
+            }
+            '0' { $exitSubMenu = $true }
+        }
+    }
+}
+
 Export-ModuleMember -Function Invoke-AuditPhase

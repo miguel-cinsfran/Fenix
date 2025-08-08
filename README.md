@@ -43,6 +43,13 @@ Script automatizado en PowerShell para la limpieza, optimización y aprovisionam
 - **Vaciar Papelera de Reciclaje:** Informa del número de archivos y el espacio que se liberará antes de confirmar.
 - **Análisis de Procesos:** Muestra los procesos que más consumen CPU y memoria, manejando errores de "Acceso Denegado".
 
+#### Fase 6: Saneamiento y Calidad del Código (Platzhalter)
+- Fase reservada para futuras herramientas de formateo, linting y análisis estático del código.
+
+#### Fase 7: Auditoría del Sistema y del Código
+- **Informe de Estado:** Genera un informe completo en formato `Markdown` con todo el software instalado a través de Winget y Chocolatey, y todos los tweaks del sistema aplicados.
+- **Auditoría de Seguridad del Código:** Escanea el propio código fuente de Fénix en busca de comandos potencialmente sensibles (`Invoke-Expression`, `Restart-Computer`, etc.) para ofrecer una total transparencia sobre sus operaciones.
+
 #### Arquitectura General
 - **Orquestador Central (`Phoenix-Launcher.ps1`):** Punto de entrada único que gestiona el menú, el estado y los módulos.
 - **Diseño Modular:** Cada fase principal reside en su propio módulo `.ps1`.
@@ -80,22 +87,49 @@ Script automatizado en PowerShell para la limpieza, optimización y aprovisionam
 
 ```text
 /
-â”œâ”€â”€ ðŸ“„ Phoenix-Launcher.ps1      # Orquestador principal
-â”œâ”€â”€ ðŸ“„ README.md                 # Esta documentación
-â”œâ”€â”€ ðŸ“‚ modules/
-â”‚   â”œâ”€â”€ Phoenix-Utils.ps1       # Funciones de UI y utilidades compartidas
-â”‚   â”œâ”€â”€ Phase1-OneDrive.ps1     # Lógica para la erradicación de OneDrive
-â”‚   â”œâ”€â”€ Phase2-Software.ps1     # Lógica para la instalación de software
-â”‚   â”œâ”€â”€ Phase3-Tweaks.ps1       # Lógica para los ajustes del sistema
-â”‚   â”œâ”€â”€ Phase4-WSL.ps1          # Lógica para la instalación de WSL
-â”‚   â””â”€â”€ Phase5-Cleanup.ps1      # Lógica para la limpieza del sistema
-â””â”€â”€ ðŸ“‚ assets/
-    â”œâ”€â”€ catalog_schema.json     # Esquema JSON que define la estructura de los catálogos
-    â””â”€â”€ ðŸ“‚ catalogs/
-        â”œâ”€â”€ chocolatey_catalog.json # Catálogo de software para Chocolatey
-        â”œâ”€â”€ winget_catalog.json     # Catálogo de software para Winget
-        â”œâ”€â”€ system_tweaks.json      # Catálogo de ajustes para la Fase 3
-        â””â”€â”€ system_cleanup.json     # Catálogo de tareas para la Fase 5
+├── 📂 assets/
+│   ├── 📂 catalogs/
+│   │   ├── chocolatey_catalog.json
+│   │   ├── system_cleanup.json
+│   │   ├── system_tweaks.json
+│   │   └── winget_catalog.json
+│   └── 📂 themes/
+│       └── default.json
+├── 📂 modules/
+│   ├── 📂 package_managers/
+│   │   ├── chocolatey.psm1
+│   │   └── winget.psm1
+│   ├── Phase1-OneDrive.psm1
+│   ├── Phase2-Software.psm1
+│   ├── Phase3-Tweaks.psm1
+│   ├── Phase4-WSL.psm1
+│   ├── Phase5-Cleanup.psm1
+│   ├── Phase6-CodeQuality.psm1
+│   ├── Phase7-Audit.psm1
+│   └── Phoenix-Utils.psm1
+├── 📂 tests/
+│   └── Utils.Tests.ps1
+├── 📜 Phoenix-Launcher.ps1
+├── 📜 README.md
+└── 📜 settings.psd1
+```
+
+### Pruebas y Calidad del Código
+
+El proyecto ha incorporado **Pester** para la realización de pruebas unitarias, asegurando la fiabilidad y facilitando el mantenimiento a largo plazo.
+
+#### Ejecutar las Pruebas
+
+Para ejecutar la suite de pruebas, asegúrate de tener el módulo de Pester instalado y luego ejecuta el siguiente comando desde la raíz del proyecto en una terminal de PowerShell:
+
+```powershell
+# Instalar Pester si no está presente
+if (-not (Get-Module -ListAvailable -Name Pester)) {
+    Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
+}
+
+# Ejecutar las pruebas
+Invoke-Pester -Path ./tests/ -Output Detailed
 ```
 
 ### Personalización de Catálogos
