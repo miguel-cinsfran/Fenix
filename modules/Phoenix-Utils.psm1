@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo de utilidades compartidas para el motor de aprovisionamiento Fénix.
 .DESCRIPTION
@@ -31,7 +31,7 @@ function Show-PhoenixHeader {
     $borderColor = if ($Global:PhoenixContext.Theme.Subtle) { $Global:PhoenixContext.Theme.Subtle } else { "DarkGray" }
 
     # Un estilo más limpio y accesible que el anterior arte ASCII.
-    $separator = "─" * ($TitleText.Length + 4) # Un poco más largo que el título para un efecto visual agradable.
+    $separator = "â”€" * ($TitleText.Length + 4) # Un poco más largo que el título para un efecto visual agradable.
 
     Write-Host
     Write-Host "  $($TitleText.ToUpper())" -ForegroundColor $titleColor
@@ -41,7 +41,7 @@ function Show-PhoenixHeader {
 
 function Write-PhoenixStyledOutput {
     param([string]$Message, [string]$Type = "Info", [switch]$NoNewline)
-    $prefixMap = @{ Step="  -> "; SubStep="     - "; Success=" [ÉXITO] "; Warn=" [ADVERTENCIA] "; Skip=" [OMITIDO] "; Error=" [ERROR] "; Log="       | " }
+    $prefixMap = @{ Step="  -> "; SubStep="     - "; Success=" [Ã‰XITO] "; Warn=" [ADVERTENCIA] "; Skip=" [OMITIDO] "; Error=" [ERROR] "; Log="       | " }
     $prefix = $prefixMap[$Type]
 
     # Asignar un color por defecto si el tipo no está en el tema.
@@ -73,11 +73,11 @@ function Show-PhoenixStandardMenu {
         if ($item.Status) {
             $statusText = "- $($item.Status)"
             switch ($item.Status) {
-                'Aplicado'                { $icon = "[✓]"; $color = $Global:PhoenixContext.Theme.Success }
-                'Actualización Disponible' { $icon = "[↑]"; $color = $Global:PhoenixContext.Theme.Warn }
-                'Instalado'               { $icon = "[✓]"; $color = $Global:PhoenixContext.Theme.Success }
+                'Aplicado'                { $icon = "[âœ“]"; $color = $Global:PhoenixContext.Theme.Success }
+                'Actualización Disponible' { $icon = "[â†‘]"; $color = $Global:PhoenixContext.Theme.Warn }
+                'Instalado'               { $icon = "[âœ“]"; $color = $Global:PhoenixContext.Theme.Success }
                 'Pendiente'               { $icon = "[ ]"; $color = $Global:PhoenixContext.Theme.Warn }
-                'Aplicado (No Reversible)'{ $icon = "[✓]"; $color = $Global:PhoenixContext.Theme.Info }
+                'Aplicado (No Reversible)'{ $icon = "[âœ“]"; $color = $Global:PhoenixContext.Theme.Info }
             }
         }
 
@@ -114,7 +114,7 @@ function Confirm-SystemRestart {
         Start-Sleep -Seconds 5
         Restart-Computer -Force
     } else {
-        Write-PhoenixStyledOutput -Type Warn -Message "ACCIÓN MANUAL REQUERIDA: Por favor, reinicie el equipo lo antes posible."
+        Write-PhoenixStyledOutput -Type Warn -Message "ACCIÃ“N MANUAL REQUERIDA: Por favor, reinicie el equipo lo antes posible."
     }
 }
 
