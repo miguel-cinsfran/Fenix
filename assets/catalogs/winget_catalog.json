@@ -14,6 +14,26 @@
         },
         { "installId": "9NKSQGP7F2NH", "checkName": "WhatsApp", "name": "WhatsApp", "source": "msstore" },
         { "installId": "Telegram.Unigram", "name": "Telegram (Unigram)" },
-        { "installId": "Zoom.Zoom", "name": "Zoom" }
+        { "installId": "Zoom.Zoom", "name": "Zoom" },
+        { "installId": "Microsoft.WindowsTerminal", "name": "Windows Terminal" },
+        { "installId": "JetBrains.Toolbox", "name": "JetBrains Toolbox" },
+        { "installId": "Postman.Postman", "name": "Postman" },
+        { "installId": "dbeaver.dbeaver", "name": "DBeaver" },
+        { "installId": "Obsidian.Obsidian", "name": "Obsidian" },
+        { "installId": "Valve.Steam", "name": "Steam" },
+        { "installId": "Bitwarden.Bitwarden", "name": "Bitwarden" },
+        { "installId": "ShareX.ShareX", "name": "ShareX" },
+        { "installId": "Microsoft.OpenJDK.21", "name": "Microsoft Build of OpenJDK 21" },
+        { "installId": "GoLang.Go", "name": "Go Programming Language" },
+        { "installId": "Rustlang.Rustup", "name": "Rustup" },
+        { "installId": "Discord.Discord", "name": "Discord" },
+        { "installId": "EpicGames.EpicGamesLauncher", "name": "Epic Games Launcher" },
+        { "installId": "Blizzard.BattleNet", "name": "Battle.net" },
+        { "installId": "GOG.Galaxy", "name": "GOG Galaxy" },
+        { "installId": "Amazon.AWSCLI", "name": "AWS CLI v2" },
+        { "installId": "Microsoft.AzureCLI", "name": "Azure CLI" },
+        { "installId": "Microsoft.DotNet.SDK.8", "name": ".NET SDK 8" },
+        { "installId": "WinMerge.WinMerge", "name": "WinMerge" },
+        { "installId": "Insomnia.Insomnia", "name": "Insomnia" }
     ]
 }
