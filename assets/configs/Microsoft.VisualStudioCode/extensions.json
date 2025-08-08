@@ -1,0 +1,10 @@
+{
+    "extensions": [
+        "ms-vscode.powershell",
+        "ms-dotnettools.csharp",
+        "ms-python.python",
+        "ms-vscode.live-server",
+        "ms-azuretools.vscode-docker",
+        "github.copilot"
+    ]
+}

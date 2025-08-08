@@ -26,12 +26,20 @@
                 "description": "Parámetros de instalación especiales, solo aplicable a Chocolatey.",
                 "type": "string"
             },
+            "install_params": {
+                "description": "Parámetros especiales que se usarán SOLO durante la instalación inicial del paquete (no en actualizaciones).",
+                "type": "string"
+            },
             "rebootRequired": {
                 "description": "Opcional. Si es verdadero, se recomienda reiniciar el sistema después de la operación.",
                 "type": "boolean"
             },
             "postInstallConfig": {
                 "description": "Opcional. Si es verdadero, indica que el paquete tiene una configuración personalizada para aplicar post-instalación.",
+                "type": "boolean"
+            },
+            "vscodeSubMenu": {
+                "description": "Opcional. Si es verdadero, muestra un submenú de gestión específico para VSCode en lugar de las acciones estándar.",
                 "type": "boolean"
             },
             "configPaths": {

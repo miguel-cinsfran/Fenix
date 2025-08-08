@@ -78,6 +78,7 @@ function Install-Package {
 
     $pkg = $Item.Package
     $chocoArgs = @("install", $pkg.installId, "-y")
+    if ($pkg.install_params) { $chocoArgs += $pkg.install_params.Split(' ') }
     if ($pkg.special_params) { $chocoArgs += "--params='$($pkg.special_params)'" }
     Invoke-ChocolateyCli -PackageName $Item.DisplayName -ArgumentList ($chocoArgs -join ' ')
 
