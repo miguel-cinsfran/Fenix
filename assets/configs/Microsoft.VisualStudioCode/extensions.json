@@ -1,10 +1,18 @@
-{
+﻿{
     "extensions": [
         "ms-vscode.powershell",
         "ms-dotnettools.csharp",
         "ms-python.python",
-        "ms-vscode.live-server",
         "ms-azuretools.vscode-docker",
-        "github.copilot"
+        "github.copilot",
+        "christian-kohler.path-intellisense",
+        "formulahendry.auto-rename-tag",
+        "humao.rest-client",
+        "golang.go",
+        "rust-lang.rust-analyzer",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-json",
+        "redhat.vscode-yaml"
     ]
 }

@@ -1,12 +1,12 @@
 ﻿<#
 .SYNOPSIS
-    MÃ³dulo de Fase 7 para la auditorÃ­a y exportaciÃ³n del estado del sistema.
+    Módulo de Fase 7 para la auditoría y exportación del estado del sistema.
 .DESCRIPTION
     Genera un informe en formato Markdown que resume el software instalado
-    y los ajustes (tweaks) aplicados por el motor FÃ©nix. TambiÃ©n incluye una
-    herramienta de auditorÃ­a de seguridad del cÃ³digo fuente del propio script.
+    y los ajustes (tweaks) aplicados por el motor Fénix. También incluye una
+    herramienta de auditoría de seguridad del código fuente del propio script.
 .NOTES
-    VersiÃ³n: 1.1
+    Versión: 1.1
     Autor: miguel-cinsfran
 #>
 
@@ -47,13 +47,13 @@ function Get-AppliedSystemTweak {
                     if ((Get-Service -Name $tweak.details.name -ErrorAction Stop).StartType -eq $tweak.details.startupType) { $isApplied = $true }
                 }
                 "PowerShellCommand" {
-                    if ($tweak.id -eq "DisableHibernation" -and (powercfg.exe /a) -match "La hibernaciÃ³n no estÃ¡ disponible.") {
+                    if ($tweak.id -eq "DisableHibernation" -and (powercfg.exe /a) -match "La hibernación no está disponible.") {
                         $isApplied = $true
                     }
                 }
             }
         } catch {
-            # Si Get-ItemPropertyValue falla, el valor no estÃ¡ establecido, por lo tanto el tweak no estÃ¡ aplicado.
+            # Si Get-ItemPropertyValue falla, el valor no está establecido, por lo tanto el tweak no está aplicado.
         }
 
         if ($isApplied) {
@@ -64,8 +64,8 @@ function Get-AppliedSystemTweak {
 }
 
 function Invoke-SystemStateAudit {
-    Show-PhoenixHeader -Title "AuditorÃ­a de Estado del Sistema"
-    Write-PhoenixStyledOutput -Type Info -Message "Esta fase generarÃ¡ un informe del estado actual del sistema."
+    Show-PhoenixHeader -Title "Auditoría de Estado del Sistema"
+    Write-PhoenixStyledOutput -Type Info -Message "Esta fase generará un informe del estado actual del sistema."
 
     try {
         $report = [System.Text.StringBuilder]::new()
@@ -75,11 +75,11 @@ function Invoke-SystemStateAudit {
         $reportPath = Join-Path $logsPath $reportName
 
         # --- Cabecera del Informe ---
-        [void]$report.AppendLine("# Informe de AuditorÃ­a del Sistema - FÃ©nix")
+        [void]$report.AppendLine("# Informe de Auditoría del Sistema - Fénix")
         [void]$report.AppendLine("Generado el: $(Get-Date)")
         [void]$report.AppendLine("---")
 
-        # --- RecolecciÃ³n de Software Instalado ---
+        # --- Recolección de Software Instalado ---
         [void]$report.AppendLine("## Software Instalado")
 
         # Chocolatey
@@ -87,7 +87,7 @@ function Invoke-SystemStateAudit {
         $chocoPackages = & choco list --limit-output --local-only 2>$null | ForEach-Object { $parts = $_ -split '\|'; if ($parts.Length -eq 2) { [PSCustomObject]@{ Name = $parts[0]; Version = $parts[1] } } }
         [void]$report.AppendLine("### Chocolatey")
         if ($chocoPackages) {
-            [void]$report.AppendLine("| Paquete | VersiÃ³n |")
+            [void]$report.AppendLine("| Paquete | Versión |")
             [void]$report.AppendLine("|---|---|")
             $chocoPackages | ForEach-Object { [void]$report.AppendLine("| $($_.Name) | $($_.Version) |") }
         } else {
@@ -108,7 +108,7 @@ function Invoke-SystemStateAudit {
         }
         [void]$report.AppendLine("### Winget")
         if ($wingetPackages) {
-            [void]$report.AppendLine("| Paquete | VersiÃ³n |")
+            [void]$report.AppendLine("| Paquete | Versión |")
             [void]$report.AppendLine("|---|---|")
             $wingetPackages | ForEach-Object { [void]$report.AppendLine("| $($_.Name) | $($_.Version) |") }
         } else {
@@ -116,12 +116,12 @@ function Invoke-SystemStateAudit {
         }
         [void]$report.AppendLine()
 
-        # --- RecolecciÃ³n de Ajustes Aplicados (Tweaks) ---
+        # --- Recolección de Ajustes Aplicados (Tweaks) ---
         Write-PhoenixStyledOutput -Type SubStep -Message "Recolectando ajustes del sistema aplicados..."
         $appliedTweaks = Get-AppliedSystemTweak
         [void]$report.AppendLine("## Ajustes del Sistema Aplicados")
         if ($appliedTweaks.Count -gt 0) {
-            [void]$report.AppendLine("| DescripciÃ³n del Ajuste |")
+            [void]$report.AppendLine("| Descripción del Ajuste |")
             [void]$report.AppendLine("|---|")
             $appliedTweaks | ForEach-Object { [void]$report.AppendLine("| $($_.description) |") }
         } else {
@@ -131,10 +131,10 @@ function Invoke-SystemStateAudit {
 
         # --- Guardar el Informe ---
         Out-File -FilePath $reportPath -InputObject $report.ToString() -Encoding utf8
-        Write-PhoenixStyledOutput -Type Success -Message "Informe de auditorÃ­a guardado en: $reportPath"
+        Write-PhoenixStyledOutput -Type Success -Message "Informe de auditoría guardado en: $reportPath"
 
     } catch {
-        Write-PhoenixStyledOutput -Type Error -Message "OcurriÃ³ un error al generar el informe de auditorÃ­a: $($_.Exception.Message)"
+        Write-PhoenixStyledOutput -Type Error -Message "Ocurrió un error al generar el informe de auditoría: $($_.Exception.Message)"
     }
 }
 
@@ -143,8 +143,8 @@ function Invoke-SystemStateAudit {
 #region Code Security Audit
 
 function Invoke-CodeSecurityAudit {
-    Show-PhoenixHeader -Title "AuditorÃ­a de Seguridad del CÃ³digo"
-    Write-PhoenixStyledOutput -Type Info -Message "Buscando el uso de comandos potencialmente sensibles en el cÃ³digo fuente de FÃ©nix..."
+    Show-PhoenixHeader -Title "Auditoría de Seguridad del Código"
+    Write-PhoenixStyledOutput -Type Info -Message "Buscando el uso de comandos potencialmente sensibles en el código fuente de Fénix..."
     Write-Host
 
     $commandsToAudit = @(
@@ -183,9 +183,9 @@ function Invoke-CodeSecurityAudit {
     }
 
     if ($totalFindings -eq 0) {
-        Write-PhoenixStyledOutput -Type Success -Message "AuditorÃ­a completada. No se encontraron comandos de riesgo en el cÃ³digo fuente."
+        Write-PhoenixStyledOutput -Type Success -Message "Auditoría completada. No se encontraron comandos de riesgo en el código fuente."
     } else {
-        Write-PhoenixStyledOutput -Type Success -Message "AuditorÃ­a completada. Total de hallazgos: $totalFindings"
+        Write-PhoenixStyledOutput -Type Success -Message "Auditoría completada. Total de hallazgos: $totalFindings"
     }
 }
 
@@ -197,10 +197,10 @@ function Invoke-AuditPhase {
 
     $exitSubMenu = $false
     while (-not $exitSubMenu) {
-        Show-PhoenixHeader -Title "FASE 7: AuditorÃ­a"
+        Show-PhoenixHeader -Title "FASE 7: Auditoría"
         Write-PhoenixStyledOutput -Type Step -Message "[1] Generar Informe de Estado del Sistema"
-        Write-PhoenixStyledOutput -Type Step -Message "[2] Ejecutar AuditorÃ­a de Seguridad del CÃ³digo Fuente"
-        Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al MenÃº Principal"
+        Write-PhoenixStyledOutput -Type Step -Message "[2] Ejecutar Auditoría de Seguridad del Código Fuente"
+        Write-PhoenixStyledOutput -Type Step -Message "[0] Volver al Menú Principal"
         Write-Host
 
         $choice = Request-MenuSelection -ValidChoices @('1', '2', '0') -AllowMultipleSelections:$false
@@ -209,11 +209,11 @@ function Invoke-AuditPhase {
         switch ($choice) {
             '1' {
                 Invoke-SystemStateAudit
-                Request-Continuation -Message "Presione Enter para volver al menÃº de auditorÃ­a..."
+                Request-Continuation -Message "Presione Enter para volver al menú de auditoría..."
             }
             '2' {
                 Invoke-CodeSecurityAudit
-                Request-Continuation -Message "Presione Enter para volver al menÃº de auditorÃ­a..."
+                Request-Continuation -Message "Presione Enter para volver al menú de auditoría..."
             }
             '0' { $exitSubMenu = $true }
         }

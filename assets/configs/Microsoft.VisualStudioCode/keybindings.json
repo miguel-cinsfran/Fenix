@@ -33,5 +33,37 @@
   {
     "key": "ctrl+alt+o",
     "command": "accessibility.showAccessibleView"
+  },
+
+  // Nuevos keybindings para productividad
+  // REST Client - Ejecutar request (solo en archivos .http)
+  {
+    "key": "ctrl+alt+r",
+    "command": "rest-client.request",
+    "when": "editorTextFocus && resourceExtname == '.http'"
+  },
+
+  // Formatear documento rápido
+  {
+    "key": "ctrl+alt+f",
+    "command": "editor.action.formatDocument"
+  },
+
+  // Navegar a definición (útil con todos tus lenguajes)
+  {
+    "key": "ctrl+alt+d",
+    "command": "editor.action.revealDefinition"
+  },
+
+  // Toggle entre terminal y editor
+  {
+    "key": "ctrl+alt+`",
+    "command": "workbench.action.terminal.focus",
+    "when": "!terminalFocus"
+  },
+  {
+    "key": "ctrl+alt+`",
+    "command": "workbench.action.focusActiveEditorGroup",
+    "when": "terminalFocus"
   }
 ]
