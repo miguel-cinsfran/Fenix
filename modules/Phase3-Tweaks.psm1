@@ -168,9 +168,9 @@ function Invoke-TweakAction {
         }
         & $functionName -Tweak $Tweak
         $success = $true
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:PhoenixContext.Theme.Success
     } catch {
-        Write-Host " [FALLO]" -F $Global:Theme.Error
+        Write-Host " [FALLO]" -F $Global:PhoenixContext.Theme.Error
         Write-PhoenixStyledOutput -Type Log -Message "Error al $actionVerb '$($Tweak.id)': $($_.Exception.Message)"
     }
 

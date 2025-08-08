@@ -106,7 +106,7 @@ function Get-PackageStatus {
     [CmdletBinding()]
     param([array]$CatalogPackages)
 
-    if ($Global:UseWingetCli -or -not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
+    if ($Global:PhoenixContext.Flags.UseWingetCli -or -not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
         return _Get-PackageStatus_Cli -CatalogPackages $CatalogPackages
     }
     try {

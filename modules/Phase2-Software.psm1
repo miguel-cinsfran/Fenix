@@ -84,7 +84,7 @@ function Install-VscodeExtensions {
         [psobject]$Package
     )
 
-    $extensionsFile = Join-Path $Global:VscodeConfigPath $Global:Settings.FileNames.VscodeExtensions
+    $extensionsFile = Join-Path $Global:PhoenixContext.Paths.VscodeConfig $Global:PhoenixContext.Settings.FileNames.VscodeExtensions
     if (-not (Test-Path $extensionsFile)) {
         Write-PhoenixStyledOutput -Type Error -Message "No se encontró el archivo de extensiones en '$extensionsFile'."
         return
@@ -370,7 +370,7 @@ function Test-Phase2Prerequisites {
 
     Write-PhoenixStyledOutput -Message "Verificando existencia de Chocolatey..." -NoNewline
     if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
+        Write-Host " [NO ENCONTRADO]" -F $Global:PhoenixContext.Theme.Warn
         Write-PhoenixStyledOutput -Type Consent -Message "El gestor de paquetes Chocolatey no está instalado y es requerido para esta fase."
         if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?" -IsYesNoPrompt) -eq 'S') {
             Write-PhoenixStyledOutput -Type Info -Message "Instalando Chocolatey... Esto puede tardar unos minutos."
@@ -385,23 +385,23 @@ function Test-Phase2Prerequisites {
             $allChecksPassed = $false
         }
     } else {
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:PhoenixContext.Theme.Success
     }
 
     Write-PhoenixStyledOutput -Message "Verificando existencia de Winget..." -NoNewline
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Error
+        Write-Host " [NO ENCONTRADO]" -F $Global:PhoenixContext.Theme.Error
         Write-PhoenixStyledOutput -Type Error -Message "El gestor de paquetes Winget no fue encontrado. Por favor, actualice su 'App Installer' desde la Microsoft Store."
         $allChecksPassed = $false
     } else {
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:PhoenixContext.Theme.Success
         Write-PhoenixStyledOutput -Type SubStep -Message "Actualizando repositorios de Winget..."
         Invoke-NativeCommandWithOutputCapture -Executable "winget" -ArgumentList "source update" -Activity "Actualizando repositorios de Winget" | Out-Null
     }
 
     Write-PhoenixStyledOutput -Message "Verificando módulo de PowerShell para Winget..." -NoNewline
     if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
-        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
+        Write-Host " [NO ENCONTRADO]" -F $Global:PhoenixContext.Theme.Warn
         Write-PhoenixStyledOutput -Type Consent -Message "El módulo de PowerShell para Winget es recomendado para una operación robusta."
         if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?" -IsYesNoPrompt) -eq 'S') {
             Write-PhoenixStyledOutput -Type Info -Message "Instalando módulo 'Microsoft.WinGet.Client'..."
@@ -411,14 +411,14 @@ function Test-Phase2Prerequisites {
             } catch {
                 Write-PhoenixStyledOutput -Type Error -Message "La instalación automática del módulo de Winget falló: $($_.Exception.Message)"
                 Write-PhoenixStyledOutput -Type Warn -Message "El script continuará usando el método de reserva (CLI)."
-                $Global:UseWingetCli = $true
+                $Global:PhoenixContext.Flags.UseWingetCli = $true
             }
         } else {
             Write-PhoenixStyledOutput -Type Warn -Message "Instalación denegada. El script usará el método de reserva para Winget."
-            $Global:UseWingetCli = $true
+            $Global:PhoenixContext.Flags.UseWingetCli = $true
         }
     } else {
-        Write-Host " [ÉXITO]" -F $Global:Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:PhoenixContext.Theme.Success
     }
 
     if (-not $allChecksPassed) {

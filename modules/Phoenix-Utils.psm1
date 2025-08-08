@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de utilidades compartidas para el motor de aprovisionamiento Fénix.
 .DESCRIPTION
@@ -6,7 +6,7 @@
     del entorno y otras tareas comunes, para ser utilizadas por el lanzador y
     todos los módulos de fase.
 .NOTES
-    Versión: 1.2
+    Versión: 1.3
     Autor: miguel-cinsfran
 #>
 
@@ -27,8 +27,8 @@ function Show-PhoenixHeader {
     )
     if (-not $NoClear) { Clear-Host }
 
-    $titleColor = if ($Global:Theme.Title) { $Global:Theme.Title } else { "Cyan" }
-    $borderColor = if ($Global:Theme.Subtle) { $Global:Theme.Subtle } else { "DarkGray" }
+    $titleColor = if ($Global:PhoenixContext.Theme.Title) { $Global:PhoenixContext.Theme.Title } else { "Cyan" }
+    $borderColor = if ($Global:PhoenixContext.Theme.Subtle) { $Global:PhoenixContext.Theme.Subtle } else { "DarkGray" }
 
     # Un estilo más limpio y accesible que el anterior arte ASCII.
     $separator = "─" * ($TitleText.Length + 4) # Un poco más largo que el título para un efecto visual agradable.
@@ -46,7 +46,7 @@ function Write-PhoenixStyledOutput {
 
     # Asignar un color por defecto si el tipo no está en el tema.
     # Esto es útil para tipos nuevos como 'Skip' sin necesidad de que todos los temas lo definan.
-    $color = $Global:Theme[$Type]
+    $color = $Global:PhoenixContext.Theme[$Type]
     if (-not $color) { $color = "White" } # Fallback to white if color not in theme
 
     if ($NoNewline) { Write-Host "$prefix$Message" -ForegroundColor $color -NoNewline }
@@ -67,17 +67,17 @@ function Show-PhoenixStandardMenu {
         $item = $MenuItems[$i]
         # Default values
         $icon = "[ ]"
-        $color = $Global:Theme.Step
+        $color = $Global:PhoenixContext.Theme.Step
         $statusText = ""
 
         if ($item.Status) {
             $statusText = "- $($item.Status)"
             switch ($item.Status) {
-                'Aplicado'                { $icon = "[✓]"; $color = $Global:Theme.Success }
-                'Actualización Disponible' { $icon = "[↑]"; $color = $Global:Theme.Warn }
-                'Instalado'               { $icon = "[✓]"; $color = $Global:Theme.Success }
-                'Pendiente'               { $icon = "[ ]"; $color = $Global:Theme.Warn }
-                'Aplicado (No Reversible)'{ $icon = "[✓]"; $color = $Global:Theme.Info }
+                'Aplicado'                { $icon = "[✓]"; $color = $Global:PhoenixContext.Theme.Success }
+                'Actualización Disponible' { $icon = "[↑]"; $color = $Global:PhoenixContext.Theme.Warn }
+                'Instalado'               { $icon = "[✓]"; $color = $Global:PhoenixContext.Theme.Success }
+                'Pendiente'               { $icon = "[ ]"; $color = $Global:PhoenixContext.Theme.Warn }
+                'Aplicado (No Reversible)'{ $icon = "[✓]"; $color = $Global:PhoenixContext.Theme.Info }
             }
         }
 
@@ -189,6 +189,7 @@ function Request-MenuSelection {
 
             if ($invalidChoices.Count -gt 0) {
                 Write-PhoenixStyledOutput -Type Error -Message "Opciones no válidas: $($invalidChoices -join ', ')"; Start-Sleep -s 1; Write-Host
+                continue
             } else {
                 if ($AllowMultipleSelections) {
                     return $finalChoices.ToArray()
@@ -422,7 +423,7 @@ function Start-PostInstallConfiguration {
         return
     }
 
-    $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    $projectRoot = $Global:PhoenixContext.Paths.Root
     $sourceConfigDir = Join-Path (Join-Path $projectRoot "assets/configs") $Package.installId
 
     if (-not (Test-Path $sourceConfigDir)) {
