@@ -1,4 +1,4 @@
-﻿{
+{
     "$schema": "./catalog_schema.json",
     "items": [
         { "installId": "Microsoft.PowerShell", "name": "PowerShell Core" },
@@ -7,8 +7,6 @@
             "installId": "Microsoft.VisualStudioCode",
             "name": "Visual Studio Code",
             "postInstallConfig": true,
-            "vscodeSubMenu": true,
-            "install_params": "--scope machine",
             "configPaths": [
                 "$env:APPDATA/Code/User",
                 "$env:ProgramFiles/Microsoft VS Code/resources/app/user"

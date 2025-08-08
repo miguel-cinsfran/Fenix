@@ -1,4 +1,4 @@
-﻿## Fénix - Motor de Aprovisionamiento para Windows
+## Fénix - Motor de Aprovisionamiento para Windows
 
 Script automatizado en PowerShell para la limpieza, optimización y aprovisionamiento estandarizado de sistemas Windows. Fénix automatiza tareas repetitivas y complejas a través de una interfaz de menú interactiva y catálogos `JSON` personalizables.
 

@@ -1,6 +1,4 @@
-﻿#
 # Fénix Provisioning Engine - Module for managing Winget packages
-#
 
 function Invoke-WingetCli {
     param(
@@ -106,7 +104,7 @@ function Get-PackageStatus {
     [CmdletBinding()]
     param([array]$CatalogPackages)
 
-    if ($Global:PhoenixContext.Flags.UseWingetCli -or -not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
+    if ($Global:UseWingetCli -or -not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
         return _Get-PackageStatus_Cli -CatalogPackages $CatalogPackages
     }
     try {
@@ -166,7 +164,6 @@ function Install-Package {
     $pkg = $Item.Package
     $wingetArgs = @("install", "--id", $pkg.installId, "--accept-package-agreements", "--accept-source-agreements")
     if ($pkg.source) { $wingetArgs += "--source", $pkg.source }
-    if ($pkg.install_params) { $wingetArgs += $pkg.install_params.Split(' ') }
     Invoke-WingetCli -PackageName $Item.DisplayName -ArgumentList ($wingetArgs -join ' ')
 
     if ($pkg.PSObject.Properties.Match('postInstallConfig') -and $pkg.postInstallConfig) {

@@ -1,0 +1,89 @@
+**********************
+PowerShell transcript start
+Start time: 20250808152517
+Username: devbox\jules
+RunAs User: devbox\jules
+Configuration Name:
+Machine: devbox (Unix 6.8.0.0)
+Host Application: /opt/microsoft/powershell/7/pwsh.dll -File Phoenix-Launcher.ps1
+Process ID: 9900
+PSVersion: 7.5.1
+PSEdition: Core
+GitCommitId: 7.5.1
+OS: Ubuntu 24.04.2 LTS
+Platform: Unix
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+Transcript started, output file is /app/logs/Provision-Log-Phoenix-20250808-152516.txt
+Cargando módulo: Phase1-OneDrive.psm1
+Cargando módulo: Phase2-Software.psm1
+Cargando módulo: Phase3-Tweaks.psm1
+Cargando módulo: Phase4-WSL.psm1
+Cargando módulo: Phase5-Cleanup.psm1
+Cargando módulo: Phase6-CodeQuality.psm1
+Cargando módulo: Phase7-Audit.psm1
+  -> Verificando la codificación de los ficheros del script...
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'catalog_schema.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'chocolatey_catalog.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'cleanup_schema.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'system_cleanup.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'system_tweaks.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'winget_catalog.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'keybindings.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'settings.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'default.json'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Provision-Log-Phoenix-20250808-152516.txt'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'chocolatey.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'winget.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phase1-OneDrive.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phase2-Software.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phase3-Tweaks.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phase4-WSL.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phase5-Cleanup.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phase6-CodeQuality.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phase7-Audit.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phoenix-Utils.psm1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Utils.Tests.ps1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'Phoenix-Launcher.ps1'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+PS>TerminatingError(Get-Content): "Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')"
+ [ADVERTENCIA] No se pudo procesar el fichero 'README.md'. Error: Cannot process argument transformation on parameter 'Encoding'. 'Byte' is not a supported encoding name. For information on defining a custom encoding, see the documentation for the Encoding.RegisterProvider method. (Parameter 'name')
+ [ÉXITO] Todos los ficheros ya tienen la codificación correcta (UTF-8 con BOM).
+
+
+  MOTOR DE APROVISIONAMIENTO FÉNIX V3.1
+  ─────────────────────────────────────────
+
+Este script automatiza la configuración y aprovisionamiento de un entorno de desarrollo en Windows.
+Realizará cambios significativos en el sistema, como instalar/desinstalar software y aplicar optimizaciones.
+
+ [ADVERTENCIA] ADVERTENCIA: Ejecute este script bajo su propio riesgo. Asegúrese de entender lo que hace cada fase.
+
+InvalidOperation: You cannot call a method on a null-valued expression.
+InvalidOperation: You cannot call a method on a null-valued expression.
+
+ [ERROR] Consentimiento no otorgado. El script se cerrará.

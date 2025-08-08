@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 5 para la limpieza y optimización del sistema.
 .DESCRIPTION
@@ -73,10 +73,10 @@ function _Invoke-CleanupTask-AnalyzeProcesses {
     $memTable = $processList | Sort-Object -Property Memory -Descending | Select-Object -First $Task.details.count | Format-Table Name, Id, $cpuFormat, $memFormat -AutoSize | Out-String
 
     Show-PhoenixHeader -Title "Top $($Task.details.count) procesos por consumo de CPU" -NoClear
-    Write-Host $cpuTable -ForegroundColor $Global:PhoenixContext.Theme.Info
+    Write-Host $cpuTable -ForegroundColor $Global:Theme.Info
 
     Show-PhoenixHeader -Title "Top $($Task.details.count) procesos por consumo de Memoria (MB)" -NoClear
-    Write-Host $memTable -ForegroundColor $Global:PhoenixContext.Theme.Info
+    Write-Host $memTable -ForegroundColor $Global:Theme.Info
 }
 
 function _Invoke-CleanupTask-SetDNS {

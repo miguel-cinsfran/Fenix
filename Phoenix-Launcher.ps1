@@ -1,96 +1,86 @@
-﻿<#
+<#
 .SYNOPSIS
     Orquestador central para el motor de aprovisionamiento Fénix.
 .DESCRIPTION
     Este script es el único punto de entrada. Carga los módulos de fase, gestiona el estado
     global (con persistencia inteligente), el menú principal, el logging y el manejo de interrupciones.
 .NOTES
-    Versión: 3.5
+    Versión: 3.4
     Autor: miguel-cinsfran
     Requiere: Privilegios de Administrador. Estructura de directorios modular.
 #>
 
-# SECCIÃ“N 0: CONFIGURACIÃ“N DE CODIFICACIÃ“N UNIVERSAL
+# SECCIÓN 0: CONFIGURACIÓN DE CODIFICACIÓN UNIVERSAL
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# SECCIÃ“N 1: AUTO-ELEVACIÃ“N DE PRIVILEGIOS
+# SECCIÓN 1: AUTO-ELEVACIÓN DE PRIVILEGIOS
 if (-not ([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Warning "Se requieren privilegios de Administrador. Relanzando..."
     Start-Process powershell -Verb RunAs -ArgumentList "-File `"$($myinvocation.mycommand.definition)`""
     exit
 }
 
-# SECCIÃ“N 2: INICIALIZACIÃ“N DEL CONTEXTO GLOBAL
-$Global:PhoenixContext = [PSCustomObject]@{
-    Paths    = @{}
-    Settings = @{}
-    Theme    = @{}
-    Flags    = @{
-        UseWingetCli = $false
-    }
-}
-
+# SECCIÓN 2: CARGA DE CONFIGURACIÓN Y DEFINICIÓN DE RUTAS
 try {
     $configFile = Join-Path $PSScriptRoot "settings.psd1"
-    $Global:PhoenixContext.Settings = Import-PowerShellDataFile -Path $configFile
+    $Global:Settings = Import-PowerShellDataFile -Path $configFile
 } catch {
     Write-Error "No se pudo cargar el fichero de configuración 'settings.psd1'. El script no puede continuar."
     Request-Continuation -Message "Presione Enter para salir."; exit
 }
 
-# Construir rutas absolutas y almacenarlas en el contexto
-$Global:PhoenixContext.Paths.Root = $PSScriptRoot
-$Global:PhoenixContext.Paths.Modules = Join-Path $PSScriptRoot $Global:PhoenixContext.Settings.Paths.Modules
-$Global:PhoenixContext.Paths.Catalogs = Join-Path $PSScriptRoot $Global:PhoenixContext.Settings.Paths.Catalogs
-$Global:PhoenixContext.Paths.Logs = Join-Path $PSScriptRoot $Global:PhoenixContext.Settings.Paths.Logs
-$Global:PhoenixContext.Paths.LogFile = Join-Path $Global:PhoenixContext.Paths.Logs "$($Global:PhoenixContext.Settings.FileNames.LogBaseName)-$((Get-Date).ToString('yyyyMMdd-HHmmss')).txt"
-$Global:PhoenixContext.Paths.ThemeFile = Join-Path $PSScriptRoot (Join-Path $Global:PhoenixContext.Settings.Paths.Themes $Global:PhoenixContext.Settings.FileNames.Theme)
-$Global:PhoenixContext.Paths.TweaksCatalog = Join-Path $Global:PhoenixContext.Paths.Catalogs $Global:PhoenixContext.Settings.FileNames.TweaksCatalog
-$Global:PhoenixContext.Paths.CleanupCatalog = Join-Path $Global:PhoenixContext.Paths.Catalogs $Global:PhoenixContext.Settings.FileNames.CleanupCatalog
-$Global:PhoenixContext.Paths.VscodeConfig = Join-Path $PSScriptRoot $Global:PhoenixContext.Settings.Paths.VscodeConfig
+# Construir rutas absolutas basadas en la configuración
+$modulesPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Modules
+$catalogsPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Catalogs
+$logPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Logs
+$logFile = Join-Path $logPath "$($Global:Settings.FileNames.LogBaseName)-$((Get-Date).ToString('yyyyMMdd-HHmmss')).txt"
+$themeFile = Join-Path $PSScriptRoot (Join-Path $Global:Settings.Paths.Themes $Global:Settings.FileNames.Theme)
+$tweaksCatalog = Join-Path $catalogsPath $Global:Settings.FileNames.TweaksCatalog
+$cleanupCatalog = Join-Path $catalogsPath $Global:Settings.FileNames.CleanupCatalog
 
 # Cargar el tema de la UI desde el fichero JSON
 try {
-    $Global:PhoenixContext.Theme = Get-Content -Raw -Path $Global:PhoenixContext.Paths.ThemeFile | ConvertFrom-Json
+    $Global:Theme = Get-Content -Raw -Path $themeFile | ConvertFrom-Json
 } catch {
-    Write-Warning "No se pudo cargar el fichero de tema desde '$($Global:PhoenixContext.Paths.ThemeFile)'. Usando colores por defecto."
-    $Global:PhoenixContext.Theme = @{ Title = "Cyan"; Subtle = "DarkGray"; Step = "White"; SubStep = "Gray"; Success = "Green"; Warn = "Yellow"; Error = "Red"; Consent = "Cyan"; Info = "Gray"; Log = "DarkGray" }
+    Write-Warning "No se pudo cargar el fichero de tema desde '$themeFile'. Usando colores por defecto."
+    $Global:Theme = @{ Title = "Cyan"; Subtle = "DarkGray"; Step = "White"; SubStep = "Gray"; Success = "Green"; Warn = "Yellow"; Error = "Red"; Consent = "Cyan"; Info = "Gray"; Log = "DarkGray" }
 }
 
 try { Stop-Transcript | Out-Null } catch {}
-Start-Transcript -Path $Global:PhoenixContext.Paths.LogFile
+Start-Transcript -Path $logFile
 
-# SECCIÃ“N 3: CARGA DE MÃ“DULOS
+# SECCIÓN 3: CARGA DE MÓDULOS
 try {
     # Importar el módulo de utilidades primero, ya que otros módulos dependen de él.
-    Import-Module (Join-Path $Global:PhoenixContext.Paths.Modules "Phoenix-Utils.psm1") -Force
+    Import-Module (Join-Path $modulesPath "Phoenix-Utils.psm1") -Force
 
     # Importar los módulos de fase dinámicamente
-    $phaseModules = Get-ChildItem -Path $Global:PhoenixContext.Paths.Modules -Filter "Phase*.psm1" | Sort-Object Name
+    $phaseModules = Get-ChildItem -Path $modulesPath -Filter "Phase*.psm1" | Sort-Object Name
     foreach ($module in $phaseModules) {
         Write-Host "Cargando módulo: $($module.Name)" -ForegroundColor DarkGray
         Import-Module $module.FullName -Force
     }
 } catch {
-    Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$($Global:PhoenixContext.Paths.Modules)'." -ForegroundColor Red
+    Write-Host "[ERROR FATAL] No se pudo cargar un módulo esencial desde la carpeta '$modulesPath'." -ForegroundColor Red
     Write-Host "Error original: $($_.Exception.Message)" -ForegroundColor Red
     Request-Continuation -Message "Presione Enter para salir."
     exit
 }
 
-# SECCIÃ“N 3.1: VERIFICACIÃ“N DE CODIFICACIÃ“N DE FICHEROS
-Set-FileEncodingToUtf8 -BasePath $Global:PhoenixContext.Paths.Root -Extensions @("*.ps1", "*.psm1", "*.json", "*.md", "*.txt")
+# SECCIÓN 3.1: VERIFICACIÓN DE CODIFICACIÓN DE FICHEROS
+# Esta función ahora es parte del módulo de utilidades y debería estar disponible.
+Set-FileEncodingToUtf8 -BasePath $PSScriptRoot -Extensions @("*.ps1", "*.psm1", "*.json", "*.md", "*.txt")
 Write-Host # Add a newline for spacing
 
-# SECCIÃ“N 3.5: VERIFICACIÃ“N INICIAL DE INTERNET
+# SECCIÓN 3.5: VERIFICACIÓN INICIAL DE INTERNET
 if (-not (Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet)) {
     Write-PhoenixStyledOutput -Type Error -Message "No se pudo establecer una conexión a Internet. El script no puede continuar."
     Request-Continuation -Message "Presione Enter para salir."
     exit
 }
 
-# SECCIÃ“N 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
+# SECCIÓN 4: PANTALLA DE BIENVENIDA Y CONSENTIMIENTO
 $global:RebootIsPending = $false
 Clear-Host
 Show-PhoenixHeader -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear
@@ -107,13 +97,13 @@ if ($consent -ne 'S') {
     exit
 }
 
-# SECCIÃ“N 5: BUCLE DE CONTROL PRINCIPAL
+# SECCIÓN 5: BUCLE DE CONTROL PRINCIPAL
 $mainMenuOptions = @(
     @{ Description = "Ejecutar FASE 1: Erradicación de OneDrive"; Action = { Invoke-OneDrivePhase } },
-    @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-SoftwareMenuPhase -CatalogPath $Global:PhoenixContext.Paths.Catalogs } },
-    @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-TweaksPhase -CatalogPath $Global:PhoenixContext.Paths.TweaksCatalog } },
+    @{ Description = "Ejecutar FASE 2: Instalación de Software"; Action = { Invoke-SoftwareMenuPhase -CatalogPath $catalogsPath } },
+    @{ Description = "Ejecutar FASE 3: Optimización del Sistema"; Action = { Invoke-TweaksPhase -CatalogPath $tweaksCatalog } },
     @{ Description = "Ejecutar FASE 4: Instalación de WSL2"; Action = { Invoke-WslPhase } },
-    @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-CleanupPhase -CatalogPath $Global:PhoenixContext.Paths.CleanupCatalog } },
+    @{ Description = "Ejecutar FASE 5: Limpieza del Sistema"; Action = { Invoke-CleanupPhase -CatalogPath $cleanupCatalog } },
     @{ Description = "Ejecutar FASE 6: Saneamiento y Calidad del Código"; Action = { Invoke-CodeQualityPhase } },
     @{ Description = "Ejecutar FASE 7: Generar Informe de Auditoría"; Action = { Invoke-AuditPhase } }
 )
@@ -121,7 +111,7 @@ $mainMenuOptions = @(
 function Show-MainMenu {
     param([array]$menuOptions, [switch]$NoClear)
     Show-PhoenixHeader -Title "Motor de Aprovisionamiento Fénix v3.1" -NoClear:$NoClear
-    Write-PhoenixStyledOutput -Type Info -Message "Toda la salida se registrará en: $($Global:PhoenixContext.Paths.LogFile)`n"
+    Write-PhoenixStyledOutput -Type Info -Message "Toda la salida se registrará en: $logFile`n"
 
     for ($i = 0; $i -lt $menuOptions.Count; $i++) {
         $option = $menuOptions[$i]
@@ -168,6 +158,6 @@ try {
     Request-Continuation -Message "Presione Enter para salir."
 } finally {
     Show-PhoenixHeader -Title "PROCESO FINALIZADO" -NoClear
-    Write-PhoenixStyledOutput -Type Info -Message "`nEl log completo de la sesión se ha guardado en: $($Global:PhoenixContext.Paths.LogFile)"; Write-Host
+    Write-PhoenixStyledOutput -Type Info -Message "`nEl log completo de la sesión se ha guardado en: $logFile"; Write-Host
     Stop-Transcript
 }

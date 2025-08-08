@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 6 para el saneamiento y la calidad del código.
 .DESCRIPTION

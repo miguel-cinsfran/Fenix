@@ -1,4 +1,4 @@
-﻿{
+{
   //–– Screen reader optimizaciones
   "editor.accessibilitySupport": "on",
   "editor.accessibilityPageSize": 100,
@@ -20,36 +20,5 @@
 
   //–– Minimizar distracciones visuales
   "editor.minimap.enabled": false,
-  "explorer.enableTimeline": false,
-
-  //–– Nuevas configuraciones para extensiones
-  //–– Formateo automático silencioso
-  "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-
-  //–– ESLint - Solo errores críticos para evitar ruido
-  "eslint.quiet": true,
-
-  //–– Path intellisense - Sin sugerencias visuales extra
-  "typescript.suggest.paths": false,
-  "javascript.suggest.paths": false,
-
-  //–– REST Client - Configuración limpia
-  "rest-client.showResponseInDifferentTab": true,
-  "rest-client.previewResponseInUntitledDocument": false,
-  "rest-client.followRedirect": true,
-
-  //–– Configuración específica por lenguaje
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.python"
-  },
-  "[javascript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[typescript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[json]": {
-    "editor.defaultFormatter": "ms-vscode.vscode-json"
-  }
+  "explorer.enableTimeline": false
 }

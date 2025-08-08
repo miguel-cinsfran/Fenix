@@ -1,4 +1,4 @@
-﻿{
+{
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Esquema para Catálogos de Software del Motor de Aprovisionamiento v5.0",
     "description": "Define una estructura que prioriza la consulta por nombre para paquetes inconsistentes como los de MSStore, garantizando una verificación robusta.",
@@ -26,20 +26,12 @@
                 "description": "Parámetros de instalación especiales, solo aplicable a Chocolatey.",
                 "type": "string"
             },
-            "install_params": {
-                "description": "Parámetros especiales que se usarán SOLO durante la instalación inicial del paquete (no en actualizaciones).",
-                "type": "string"
-            },
             "rebootRequired": {
                 "description": "Opcional. Si es verdadero, se recomienda reiniciar el sistema después de la operación.",
                 "type": "boolean"
             },
             "postInstallConfig": {
                 "description": "Opcional. Si es verdadero, indica que el paquete tiene una configuración personalizada para aplicar post-instalación.",
-                "type": "boolean"
-            },
-            "vscodeSubMenu": {
-                "description": "Opcional. Si es verdadero, muestra un submenú de gestión específico para VSCode en lugar de las acciones estándar.",
                 "type": "boolean"
             },
             "configPaths": {

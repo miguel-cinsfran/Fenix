@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de Fase 2 para la instalación de software desde manifiestos.
 .DESCRIPTION
@@ -79,142 +79,11 @@ function Get-PackageMenuAction {
     return $actions
 }
 
-function Install-VscodeExtensions {
-    param (
-        [psobject]$Package
-    )
-
-    $extensionsFile = Join-Path $Global:PhoenixContext.Paths.VscodeConfig $Global:PhoenixContext.Settings.FileNames.VscodeExtensions
-    if (-not (Test-Path $extensionsFile)) {
-        Write-PhoenixStyledOutput -Type Error -Message "No se encontró el archivo de extensiones en '$extensionsFile'."
-        return
-    }
-
-    $extensions = (Get-Content $extensionsFile | ConvertFrom-Json).extensions
-    if (-not $extensions) {
-        Write-PhoenixStyledOutput -Type Warn -Message "No se encontraron extensiones en '$extensionsFile'."
-        return
-    }
-
-    Write-PhoenixStyledOutput -Type Info -Message "Buscando el ejecutable de VSCode ('code.cmd' o 'code.exe')..."
-    $vscodePath = Get-Command -Name code -ErrorAction SilentlyContinue
-    if (-not $vscodePath) {
-        $searchPaths = @(
-            (Join-Path $env:ProgramFiles "Microsoft VS Code/bin/code.cmd"),
-            (Join-Path $env:LOCALAPPDATA "Programs/Microsoft VS Code/bin/code.cmd")
-        )
-        $vscodePath = $searchPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-    }
-
-    if (-not $vscodePath) {
-        Write-PhoenixStyledOutput -Type Error -Message "No se pudo encontrar el ejecutable de VSCode. Asegúrese de que esté en el PATH o en una ubicación estándar."
-        Request-Continuation
-        return
-    }
-     Write-PhoenixStyledOutput -Type Success -Message "Ejecutable de VSCode encontrado en: $($vscodePath.Source)"
-
-    foreach ($ext in $extensions) {
-        Write-PhoenixStyledOutput -Type SubStep -Message "Instalando extensión: $ext"
-        $result = Invoke-NativeCommandWithOutputCapture -Executable $vscodePath.Source -ArgumentList "--install-extension $ext" -Activity "Instalando $ext"
-        if (-not $result.Success) {
-            Write-PhoenixStyledOutput -Type Warn -Message "Falló la instalación de '$ext'. Puede que ya esté instalada o que haya ocurrido un error."
-        }
-    }
-    Write-PhoenixStyledOutput -Type Success -Message "Proceso de instalación de extensiones finalizado."
-    Request-Continuation
-}
-
-function Show-VscodeSubMenu {
-    param(
-        [string]$Manager,
-        [psobject]$Item
-    )
-
-    $exitMenu = $false
-    while (-not $exitMenu) {
-        Show-PhoenixHeader -Title "Gestionando: $($Item.DisplayName) (Menú Especial)" -NoClear
-        Write-PhoenixStyledOutput -Type Info -Message "Estado: $($Item.Status) $($Item.VersionInfo)"
-
-        $menuOptions = [ordered]@{
-            'E' = 'Instalar/Actualizar extensiones desde JSON'
-            'C' = 'Forzar reaplicación de configuraciones (settings, keybindings)'
-        }
-
-        # Add standard actions based on status
-        if ($Item.Status -eq 'No Instalado') {
-            $menuOptions['I'] = 'Instalar paquete'
-        } else {
-            if ($Item.IsUpgradable) {
-                $menuOptions['A'] = 'Actualizar paquete'
-            }
-            $menuOptions['D'] = 'Desinstalar paquete'
-        }
-        $menuOptions['0'] = 'Volver'
-
-
-        Write-PhoenixStyledOutput -Type Title -Message "Acciones Disponibles:"
-        foreach ($key in $menuOptions.Keys) {
-            Write-PhoenixStyledOutput -Type Consent -Message "[$key] $($menuOptions[$key])"
-        }
-
-        $choice = Request-MenuSelection -ValidChoices ($menuOptions.Keys | ForEach-Object { "$_" }) -AllowMultipleSelections:$false
-        if ([string]::IsNullOrEmpty($choice)) { continue }
-
-        try {
-            switch ($choice) {
-                'I' {
-                    if ($Manager -eq 'Chocolatey') { Install-ChocoPackage -Item $Item }
-                    else { Install-WingetPackage -Item $Item }
-                    Clear-PackageStatusCache -Manager $Manager
-                    $exitMenu = $true
-                }
-                'A' {
-                    if ($Manager -eq 'Chocolatey') { Update-ChocoPackage -Item $Item }
-                    else { Update-WingetPackage -Item $Item }
-                    Clear-PackageStatusCache -Manager $Manager
-                    $exitMenu = $true
-                }
-                'D' {
-                    $confirmChoice = Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Está seguro de que desea desinstalar $($Item.DisplayName)?" -IsYesNoPrompt
-                    if ($confirmChoice -eq 'S') {
-                        if ($Manager -eq 'Chocolatey') { Uninstall-ChocoPackage -Item $Item }
-                        else { Uninstall-WingetPackage -Item $Item }
-                        Clear-PackageStatusCache -Manager $Manager
-                    }
-                    $exitMenu = $true
-                }
-                'E' {
-                    Install-VscodeExtensions -Package $Item.Package
-                }
-                'C' {
-                    if ($Item.Status -eq 'No Instalado') {
-                        Write-PhoenixStyledOutput -Type Warn -Message "VSCode no está instalado. No se pueden aplicar configuraciones."
-                        Start-Sleep -Seconds 2
-                    } else {
-                        Write-PhoenixStyledOutput -Type Info -Message "Aplicando configuración de VSCode..."
-                        Start-PostInstallConfiguration -Package $Item.Package
-                    }
-                }
-                '0' { $exitMenu = $true }
-            }
-        } catch {
-            Write-PhoenixStyledOutput -Type Error -Message "La operación del paquete falló: $($_.Exception.Message)"
-            Request-Continuation -Message "Presione Enter para continuar..."
-        }
-    }
-}
-
 function Show-SinglePackageMenu {
     param(
         [string]$Manager,
         [psobject]$Item
     )
-
-    if ($Item.Package.PSObject.Properties.Match('vscodeSubMenu') -and $Item.Package.vscodeSubMenu) {
-        Show-VscodeSubMenu -Manager $Manager -Item $Item
-        return
-    }
-
     $exitMenu = $false
     while (-not $exitMenu) {
         Show-PhoenixHeader -Title "Gestionando: $($Item.DisplayName)" -NoClear
@@ -370,7 +239,7 @@ function Test-Phase2Prerequisites {
 
     Write-PhoenixStyledOutput -Message "Verificando existencia de Chocolatey..." -NoNewline
     if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-        Write-Host " [NO ENCONTRADO]" -F $Global:PhoenixContext.Theme.Warn
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
         Write-PhoenixStyledOutput -Type Consent -Message "El gestor de paquetes Chocolatey no está instalado y es requerido para esta fase."
         if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?" -IsYesNoPrompt) -eq 'S') {
             Write-PhoenixStyledOutput -Type Info -Message "Instalando Chocolatey... Esto puede tardar unos minutos."
@@ -385,23 +254,23 @@ function Test-Phase2Prerequisites {
             $allChecksPassed = $false
         }
     } else {
-        Write-Host " [ÉXITO]" -F $Global:PhoenixContext.Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
     }
 
     Write-PhoenixStyledOutput -Message "Verificando existencia de Winget..." -NoNewline
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Write-Host " [NO ENCONTRADO]" -F $Global:PhoenixContext.Theme.Error
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Error
         Write-PhoenixStyledOutput -Type Error -Message "El gestor de paquetes Winget no fue encontrado. Por favor, actualice su 'App Installer' desde la Microsoft Store."
         $allChecksPassed = $false
     } else {
-        Write-Host " [ÉXITO]" -F $Global:PhoenixContext.Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
         Write-PhoenixStyledOutput -Type SubStep -Message "Actualizando repositorios de Winget..."
         Invoke-NativeCommandWithOutputCapture -Executable "winget" -ArgumentList "source update" -Activity "Actualizando repositorios de Winget" | Out-Null
     }
 
     Write-PhoenixStyledOutput -Message "Verificando módulo de PowerShell para Winget..." -NoNewline
     if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
-        Write-Host " [NO ENCONTRADO]" -F $Global:PhoenixContext.Theme.Warn
+        Write-Host " [NO ENCONTRADO]" -F $Global:Theme.Warn
         Write-PhoenixStyledOutput -Type Consent -Message "El módulo de PowerShell para Winget es recomendado para una operación robusta."
         if ((Request-MenuSelection -ValidChoices @('S','N') -PromptMessage "¿Desea que el script intente instalarlo ahora?" -IsYesNoPrompt) -eq 'S') {
             Write-PhoenixStyledOutput -Type Info -Message "Instalando módulo 'Microsoft.WinGet.Client'..."
@@ -411,14 +280,14 @@ function Test-Phase2Prerequisites {
             } catch {
                 Write-PhoenixStyledOutput -Type Error -Message "La instalación automática del módulo de Winget falló: $($_.Exception.Message)"
                 Write-PhoenixStyledOutput -Type Warn -Message "El script continuará usando el método de reserva (CLI)."
-                $Global:PhoenixContext.Flags.UseWingetCli = $true
+                $Global:UseWingetCli = $true
             }
         } else {
             Write-PhoenixStyledOutput -Type Warn -Message "Instalación denegada. El script usará el método de reserva para Winget."
-            $Global:PhoenixContext.Flags.UseWingetCli = $true
+            $Global:UseWingetCli = $true
         }
     } else {
-        Write-Host " [ÉXITO]" -F $Global:PhoenixContext.Theme.Success
+        Write-Host " [ÉXITO]" -F $Global:Theme.Success
     }
 
     if (-not $allChecksPassed) {

@@ -1,4 +1,4 @@
-﻿{
+{
   "Title": "Cyan",
   "Subtle": "DarkGray",
   "Step": "White",
@@ -6,7 +6,7 @@
   "Success": "Green",
   "Warn": "Yellow",
   "Error": "Red",
-    "Consent": "Magenta",
+  "Consent": "Magenta",
   "Info": "Gray",
   "Log": "DarkGray",
   "Skip": "Gray"
