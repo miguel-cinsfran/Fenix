@@ -30,14 +30,17 @@ try {
     Request-Continuation -Message "Presione Enter para salir."; exit
 }
 
+$Global:ProjectRoot = $PSScriptRoot
+
 # Construir rutas absolutas basadas en la configuración
-$modulesPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Modules
-$catalogsPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Catalogs
-$logPath = Join-Path $PSScriptRoot $Global:Settings.Paths.Logs
+$modulesPath = Join-Path $Global:ProjectRoot $Global:Settings.Paths.Modules
+$catalogsPath = Join-Path $Global:ProjectRoot $Global:Settings.Paths.Catalogs
+$logPath = Join-Path $Global:ProjectRoot $Global:Settings.Paths.Logs
 $logFile = Join-Path $logPath "$($Global:Settings.FileNames.LogBaseName)-$((Get-Date).ToString('yyyyMMdd-HHmmss')).txt"
-$themeFile = Join-Path $PSScriptRoot (Join-Path $Global:Settings.Paths.Themes $Global:Settings.FileNames.Theme)
+$themeFile = Join-Path $Global:ProjectRoot (Join-Path $Global:Settings.Paths.Themes $Global:Settings.FileNames.Theme)
 $tweaksCatalog = Join-Path $catalogsPath $Global:Settings.FileNames.TweaksCatalog
 $cleanupCatalog = Join-Path $catalogsPath $Global:Settings.FileNames.CleanupCatalog
+$Global:VscodeConfigPath = Join-Path $Global:ProjectRoot $Global:Settings.Paths.VscodeConfig
 
 # Cargar el tema de la UI desde el fichero JSON
 try {

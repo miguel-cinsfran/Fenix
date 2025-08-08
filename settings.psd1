@@ -7,6 +7,7 @@
         Logs = "logs"
         Themes = "assets/themes"
         Catalogs = "assets/catalogs"
+        VscodeConfig = "assets/configs/Microsoft.VisualStudioCode"
     }
 
     # Nombres de ficheros de configuración y catálogos.
@@ -16,6 +17,7 @@
         CleanupCatalog = "system_cleanup.json"
         ChocolateyCatalog = "chocolatey_catalog.json"
         WingetCatalog = "winget_catalog.json"
+        VscodeExtensions = "extensions.json"
         LogBaseName = "Provision-Log-Phoenix"
     }
 }

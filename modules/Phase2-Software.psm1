@@ -84,7 +84,7 @@ function Install-VscodeExtensions {
         [psobject]$Package
     )
 
-    $extensionsFile = Join-Path $PSScriptRoot "assets/configs/Microsoft.VisualStudioCode/extensions.json"
+    $extensionsFile = Join-Path $Global:VscodeConfigPath $Global:Settings.FileNames.VscodeExtensions
     if (-not (Test-Path $extensionsFile)) {
         Write-PhoenixStyledOutput -Type Error -Message "No se encontró el archivo de extensiones en '$extensionsFile'."
         return
